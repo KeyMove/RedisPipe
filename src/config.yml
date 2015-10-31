@@ -1,0 +1,15 @@
+#数据库地址
+Host: localhost
+#端口号
+Port: 6379
+#服务器名称
+ServerName: lobby
+#出现同名服务器也强制连接到数据库
+CoverServer: false
+
+#是否启用跨服聊天
+ServerChat: true
+#是否启用跨服背包同步
+ServerBackpack: true
+#跨服聊天格式  服务器名称采用 %server% 玩家名称采用%player% 聊天信息采用%message%
+ServerChatFormat: '[%server%] <%player%> %message%'

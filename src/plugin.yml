@@ -1,0 +1,9 @@
+## YAML Template.
+---
+name: RedisPipe
+main: com.github.KeyMove.RedisPipe
+version: 1.0.0
+
+commands:
+  rp:
+  rptp:
