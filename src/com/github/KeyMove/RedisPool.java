@@ -29,7 +29,6 @@ public class RedisPool{
             socket.close();
             return true;
         } catch (IOException ex) {
-            Logger.getLogger(RedisPool.class.getName()).log(Level.SEVERE, null, ex);
         }
         return false;
     }
@@ -39,7 +38,7 @@ public class RedisPool{
     public RedisPool(String host,int port){
         //super(getConfig(), host, port);
         for(int i=0;i<50;i++){
-            JedisList.add(new Jedis(host, port,10000,60000));
+            JedisList.add(new Jedis(host, port));
         }
     }
 
@@ -71,6 +70,7 @@ public class RedisPool{
             Jedis js=JedisList.get(0);
             JedisList.remove(js);
             UseJedList.add(js);
+            js.connect();
             return js;
         }
         return null;
@@ -80,7 +80,7 @@ public class RedisPool{
         if(UseJedList.contains(js)){
             UseJedList.remove(js);
             JedisList.add(js);
-            js.close();
+            //js.close();
         }
     }
 }

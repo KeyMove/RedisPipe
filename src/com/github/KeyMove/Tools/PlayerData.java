@@ -22,5 +22,5 @@ public class PlayerData implements Serializable{
     public double[] 生命值;
     public int 饱食度;
     public int 等级;
-    public int 经验值;
+    public float 经验值;
 }

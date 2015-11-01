@@ -42,7 +42,7 @@ public class PlayerInfo {
     public double[] 生命值;
     public int 饱食度;
     public int 等级;
-    public int 经验值;
+    public float 经验值;
     
     public static byte[] PlayerArray(Player p){
         PlayerData data=new PlayerData();
@@ -69,7 +69,7 @@ public class PlayerInfo {
         }
         
         data.等级=p.getLevel();
-        data.经验值=p.getTotalExperience();
+        data.经验值=p.getExp();
         
         PlayerInventory inv=p.getInventory();
         ItemStack itemStack;
@@ -181,7 +181,7 @@ public class PlayerInfo {
         }
         player.setFoodLevel(info.饱食度);
         player.setLevel(info.等级);
-        player.setTotalExperience(info.经验值);
+        player.setExp(info.经验值);
         
         if(info.药水效果!=null)
             for(PotionEffect pe:info.药水效果){
@@ -194,7 +194,7 @@ public class PlayerInfo {
         inv.setHelmet(头);
         inv.setChestplate(衣服);
         inv.setLeggings(腿部);
-        inv.setLeggings(鞋子);
+        inv.setBoots(鞋子);
         if(物品栏!=null)
             for(int i=0;i<物品栏.length;i++){
                 inv.setItem(i, 物品栏[i]);
@@ -206,11 +206,12 @@ public class PlayerInfo {
         }
         player.setFoodLevel(饱食度);
         player.setLevel(等级);
-        player.setTotalExperience(经验值);
+        player.setExp(经验值);
         
         if(药水效果!=null)
             for(PotionEffect pe:药水效果){
-                pe.apply(player);
+                if(pe!=null)
+                    pe.apply(player);
             }
     }
     

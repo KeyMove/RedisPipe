@@ -6,7 +6,8 @@ Port: 6379
 ServerName: lobby
 #出现同名服务器也强制连接到数据库
 CoverServer: false
-
+#服务器信息中显示真实IP
+RealIP: false
 #是否启用跨服聊天
 ServerChat: true
 #是否启用跨服背包同步

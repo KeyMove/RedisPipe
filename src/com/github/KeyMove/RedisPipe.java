@@ -13,6 +13,7 @@ import java.io.IOException;
 import static java.lang.System.out;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -22,6 +23,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import redis.clients.jedis.*;
 /**
@@ -39,6 +41,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
     static int localport=25565;
     
     static boolean CoverFlag=false;
+    static boolean RealIP=false;
     YamlConfiguration 配置文件;
     int linkcount=0;
     
@@ -71,12 +74,23 @@ public class RedisPipe extends JavaPlugin implements Listener{
         if(数据库.isConnected()){
             try{
             数据库.lrem("server", 0, RedisPipeAPI.ServerName);
-            数据库.clientSetname("");
-            数据库.close();
+            数据库.quit();
+            //数据库.clientSetname("");
+            //数据库.close();
             //数据库.connect();
             //数据库.disconnect();
             }catch(Exception e){
                 
+            }
+        }
+        if(数据库API!=null){
+            if(RedisPipeAPI.聊天同步){
+                数据库API.StopChat();
+                log("关闭背包同步通道!");
+            }
+            if(RedisPipeAPI.背包同步){
+                数据库API.StopBackpack();
+                log("关闭背包同步通道!");
             }
         }
     }
@@ -108,27 +122,28 @@ public class RedisPipe extends JavaPlugin implements Listener{
             }
             js.close();
         }
-        Close();
+        try {
+            Close();
         pool=new RedisPool(addr, port);
         数据库=pool.get();
         数据库.clientSetname(RedisPipeAPI.ServerName);
         if(localaddr==null)Updatelocaladdr();
         数据库.lpush("server", RedisPipeAPI.ServerName);
-        if(!localaddr.contains("127.0.0.1"))
-        {
-            数据库.set("serverinfo-"+RedisPipeAPI.ServerName, localaddr+","+localport);
-            log("本机地址: ["+localaddr+"]");
-        }
-        else{
-            new Thread(()->{try {
-                                localaddr=IP138.getMyIP();
-                                数据库.set("serverinfo-"+RedisPipeAPI.ServerName, localaddr+","+localport);
-                                log("本机地址: ["+localaddr+"]");
-                                } catch (IOException ex) {
-                                    Logger.getLogger(RedisPipe.class.getName()).log(Level.SEVERE, null, ex);
-                                }
-                        }).start();
-        }
+            if(!localaddr.contains("127.0.0.1")||!RealIP)
+            {
+                数据库.set("serverinfo-"+RedisPipeAPI.ServerName, localaddr+","+localport);
+                log("本机地址: ["+localaddr+"]");
+            }
+            else{
+                new Thread(()->{try {
+                    localaddr=IP138.getMyIP();
+                    数据库.set("serverinfo-"+RedisPipeAPI.ServerName, localaddr+","+localport);
+                    log("本机地址: ["+localaddr+"]");
+                } catch (IOException ex) {
+                    Logger.getLogger(RedisPipe.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                }).start();
+            }
         log("数据库初始化成功!");
         if(数据库API==null)
             数据库API=new RedisPipeAPI(pool);
@@ -143,6 +158,10 @@ public class RedisPipe extends JavaPlugin implements Listener{
             log("注册背包同步通道!");
         }
         return true;
+        } catch (Exception e) {
+        }
+        
+        return false;
     }
     
     public boolean Init(){
@@ -157,6 +176,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
         RedisPipeAPI.聊天同步=配置文件.getBoolean("ServerChat");
         RedisPipeAPI.MessageFormat=配置文件.getString("ServerChatFormat");
         RedisPipeAPI.背包同步=配置文件.getBoolean("ServerBackpack");
+        RealIP=配置文件.getBoolean("RealIP");
         CoverFlag=配置文件.getBoolean("CoverServer");
         return Link(Host,Port,false);
     }
@@ -194,12 +214,33 @@ public class RedisPipe extends JavaPlugin implements Listener{
     @EventHandler void LoginEvent(PlayerLoginEvent e){
         if(RedisPipeAPI.背包同步)
             if(数据库API!=null)
-                数据库API.PlayerBackpack(e.getPlayer());
+            {
+                //数据库API.PlayerBackpack(e.getPlayer());
+                getServer().getScheduler().runTaskLater(this, new Runnable() {
+                    @Override
+                    public void run() {
+                        数据库API.PlayerBackpack(e.getPlayer());
+                        log("同步背包完成!");
+                    }
+                }, 1);
+                //e.getPlayer().getInventory().setItem(1, new ItemStack(Material.IRON_AXE));
+                log("开始同步背包");
+            }
     }
     @EventHandler void QuitEvent(PlayerQuitEvent e){
         if(RedisPipeAPI.背包同步)
             if(数据库API!=null)
-                数据库API.SavePlayer(e.getPlayer());
+            {
+                getServer().getScheduler().runTask(this, new Runnable() {
+
+                    @Override
+                    public void run() {
+                        数据库API.SavePlayer(e.getPlayer());
+                        log("背包保存完成");
+                    }
+                });
+                log("开始保存背包");
+            }
     }
     
     @Override
@@ -273,7 +314,22 @@ public class RedisPipe extends JavaPlugin implements Listener{
             }
             else
             {
-                数据库API.sendPlayer(p, servername);
+                if(!数据库API.Servers(servername)){
+                    sender.sendMessage("[RedisPipe] 未发现该服务器");
+                    return false;
+                }
+                if(RedisPipeAPI.背包同步){
+                    getServer().getScheduler().runTask(this, new Runnable() {
+                        @Override
+                        public void run() {
+                            log("同步数据");
+                            数据库API.sendPlayer(p, servername);
+                            log("同步数据完成");
+                        }
+                    });
+                }else{
+                    数据库API.sendPlayer(p, servername);
+                }
                 return true;
             }
         }

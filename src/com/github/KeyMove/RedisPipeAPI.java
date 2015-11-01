@@ -37,9 +37,10 @@ public class RedisPipeAPI {
     static String 聊天通道="Chat";
     static RedisHandle BackackHandle;
     static String 背包通道="Backpack";
+    static List<Player> SendPlayers=new ArrayList<>();
     
     static Map<String,PlayerInfo> PlayerCache=new HashMap<>();
-    
+    static List<String> ServerList=new ArrayList<>();
     public static String MessageFormat=null;
     public static String ServerName=null;
     
@@ -87,7 +88,11 @@ public class RedisPipeAPI {
         public void Stop(){
             relink=false;
             if(handleThread!=null)
-                try {messageJedis.close();handleThread.stop();handleThread=null;} catch (Exception e) {}
+            {
+                messageJedis.close();
+                handleThread.stop();
+                handleThread=null;
+            }
         }
         
     }
@@ -100,6 +105,27 @@ public class RedisPipeAPI {
             database.publish(聊天通道, ServerName+"&"+p.getName()+"&"+message.replace("&", "§"));
         }
     }
+    
+    public List<String> Servers(){
+        ServerList=database.lrange("server", 0, -1);
+        return ServerList;
+    }
+    
+    public boolean Servers(String ServerName){
+        if(ServerName==null)return false;
+        if(!Check())return false;
+        if(ServerList.contains(ServerName)){
+            return true;
+        }
+        try {
+            ServerList=database.lrange("server", 0, -1);
+            return ServerList.contains(ServerName);
+        } catch (Exception e) {
+        }
+        return false;
+        
+    }
+            
     
     public RedisPipeAPI(RedisPool p){
         pool=p;
@@ -120,17 +146,26 @@ public class RedisPipeAPI {
             public void OnMessage(String message) {
                 String[] v=message.split(",");
                 if(v.length!=2)return;
-                if(!v[0].equalsIgnoreCase(ServerName))return;
-                Check();
-                byte[] pdata=database.get(("PlayerData-"+v[1]).getBytes());
-                if(pdata==null)return;
+                //System.out.print(v[0]);
+                //System.out.print(v[1]);
+                if(!v[1].equalsIgnoreCase(ServerName))return;
+                //Check();
+                Jedis js=pool.get();
+                if(js==null)return;
+                byte[] pdata=js.get(("PlayerData-"+v[0]).getBytes());
+                if(pdata==null){pool.release(js);return;}
                 PlayerInfo info=PlayerInfo.ArrayPlayer(pdata, new PlayerInfo());
-                Player p=Bukkit.getPlayer(v[1]);
+                Player p=Bukkit.getPlayer(v[0]);
                 if(p==null)
-                    PlayerCache.put(v[1], info);
+                {   
+                    PlayerCache.put(v[0], info);
+                    js.publish("tpplayer", message).intValue();
+                    //System.out.print("send tp");
+                }
                 else{
                     info.toPlayer(p);
                 }
+                pool.release(js);
             }
         });
         
@@ -186,23 +221,51 @@ public class RedisPipeAPI {
     
     public void PlayerBackpack(Player p){
         if(PlayerCache.containsKey(p.getName())){
-            PlayerCache.get(p.getName()).toPlayer(p);
+            System.out.println("缓存同步");
+            PlayerInfo inf=PlayerCache.get(p.getName());
+            //System.out.println(inf);
+            inf.toPlayer(p);
             PlayerCache.remove(p.getName());
         }
-    }
-    
-    public void SavePlayer(Player p){
-        if(!Check())return;
-        database.set(("PlayerData-"+p.getName()).getBytes(), PlayerInfo.PlayerArray(p));
-    }
-    
-    public void LoadPlayer(Player p){
-        if(!Check())return;
-        byte[] arrays=database.get(("PlayerData-"+p.getName()).getBytes());
-        if(arrays!=null){
-            PlayerInfo info=PlayerInfo.ArrayPlayer(arrays, new PlayerInfo());
-            info.toPlayer(p);
+        else{
+            System.out.println("数据库同步");
+            LoadPlayer(p);
         }
+    }
+    
+    public boolean SavePlayer(Player p){
+        Jedis js=pool.get();
+        if(js==null)return false;
+        byte[] keys=("PlayerData-"+p.getName()).getBytes();
+        try {
+            js.del(keys);
+            while(js.exists(keys));
+            js.set(keys, PlayerInfo.PlayerArray(p));
+            while(!js.exists(keys));
+            js.disconnect();
+            pool.release(js);
+        } catch (Exception e) {
+            pool.release(js);
+            return false;
+        }
+        return true;
+    }
+    
+    public boolean LoadPlayer(Player p){
+        Jedis js=pool.get();
+        if(js==null)return false;
+        try {
+            byte[] arrays=js.get(("PlayerData-"+p.getName()).getBytes());
+            if(arrays!=null){
+                PlayerInfo info=PlayerInfo.ArrayPlayer(arrays, new PlayerInfo());
+                info.toPlayer(p);
+            }
+            pool.release(js);
+        } catch (Exception e) {
+            pool.release(js);
+            return false;
+        }
+        return true;
     }
     
     
@@ -256,8 +319,15 @@ public class RedisPipeAPI {
     public int sendPlayer(Player player,String ServerName){
         if(!Check())return -1;
         if(背包同步)
-            database.publish(背包通道, ServerName+","+player.getName()).intValue();
-        return database.publish("tpplayer", player.getName()+","+ServerName).intValue();
+        {
+            //System.out.println("保存");
+            SavePlayer(player);
+            //System.out.println("发送");
+            return database.publish(背包通道, player.getName()+","+ServerName).intValue();
+        }
+        else{
+            return database.publish("tpplayer", player.getName()+","+ServerName).intValue();
+        }
     }
     
     public int sendPlayer(Player player,String addr,int port){

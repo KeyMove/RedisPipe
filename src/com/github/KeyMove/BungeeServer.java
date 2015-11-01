@@ -13,7 +13,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import static java.lang.System.out;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
@@ -36,7 +35,15 @@ public class BungeeServer extends Plugin{
 
     static Jedis 数据库;
     static boolean isLink=false;
-    Runnable 监听传送玩家=() -> {数据库.subscribe(new listerdata(), "tpplayer");};
+    static listerdata handle;
+    Runnable 监听传送玩家=() -> {
+        do{
+            try{
+                数据库.subscribe(handle, "tpplayer");
+            }catch (Exception e){
+            }
+        }while(数据库.isConnected());
+    };
     ScheduledTask 监控线程;
     Plugin 插件;
     String Host="localhost";
@@ -220,6 +227,7 @@ public class BungeeServer extends Plugin{
     @Override
     public void onEnable() {
         插件=this;
+        handle=new listerdata();
         config();
         out.print("Link Host:"+Host+":"+Port);
         if(Link(Host,Port)){
