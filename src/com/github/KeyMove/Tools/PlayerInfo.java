@@ -9,23 +9,19 @@ package com.github.KeyMove.Tools;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
-import org.bukkit.Effect;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-import org.bukkit.potion.PotionType;
 
 /**
  *
@@ -38,6 +34,7 @@ public class PlayerInfo {
     public ItemStack 腿部;
     public ItemStack 鞋子;
     public ItemStack[] 物品栏;
+    public ItemStack[] 末影箱;
     public PotionEffect[] 药水效果;
     public double[] 生命值;
     public int 饱食度;
@@ -99,6 +96,19 @@ public class PlayerInfo {
                 data.物品栏[i]=null;
             }
         }
+        
+        Inventory endinv=p.getEnderChest();
+        data.末影箱=new byte[27][];
+        for(int i=0;i<27;i++){
+            ItemStack item=endinv.getItem(i);
+            if(item!=null){
+                data.末影箱[i]=NBTCoder.ItemStackArray(item);
+            }
+            else{
+                data.末影箱[i]=null;
+            }
+        }
+        
         byte[] arrays=null;
         try {
             localDataOutputStream.writeObject(data);
@@ -151,6 +161,13 @@ public class PlayerInfo {
             }
         }
         
+        player.末影箱=new ItemStack[27];
+        for(int i=0;i<27;i++){
+            if(data.末影箱[i]!=null){
+                player.末影箱[i]=NBTCoder.ArrayItemStack(data.末影箱[i]);
+            }
+        }
+        
         if(data.药水效果!=null){
             int len=data.药水效果.length/3;
             if((len)!=0){
@@ -179,6 +196,15 @@ public class PlayerInfo {
             player.setHealth(info.生命值[0]);
             player.setMaxHealth(info.生命值[1]);
         }
+        
+        if(info.末影箱!=null){
+            Inventory endinv=player.getEnderChest();
+            //player.末影箱=new ItemStack[27];
+            for(int i=0;i<27;i++){
+                endinv.setItem(i, info.末影箱[i]);
+            }
+        }
+        
         player.setFoodLevel(info.饱食度);
         player.setLevel(info.等级);
         player.setExp(info.经验值);
@@ -199,6 +225,16 @@ public class PlayerInfo {
             for(int i=0;i<物品栏.length;i++){
                 inv.setItem(i, 物品栏[i]);
             }
+        
+        
+        if(末影箱!=null)
+        {
+            Inventory endinv=player.getEnderChest();
+            for(int i=0;i<27;i++){
+                endinv.setItem(i, 末影箱[i]);
+            }
+        }
+        
         if(生命值!=null)
         {   
             player.setHealth(生命值[0]);

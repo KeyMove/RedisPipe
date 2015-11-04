@@ -18,6 +18,7 @@ public class PlayerData implements Serializable{
     public byte[] 腿部;
     public byte[] 鞋子;
     public byte[][] 物品栏;
+    public byte [][] 末影箱;
     public int[] 药水效果;
     public double[] 生命值;
     public int 饱食度;

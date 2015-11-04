@@ -33,7 +33,7 @@ import redis.clients.jedis.*;
  */
 public class BungeeServer extends Plugin{
 
-    static Jedis 数据库;
+    static Jedis 数据库=new Jedis();
     static boolean isLink=false;
     static listerdata handle;
     Runnable 监听传送玩家=() -> {
@@ -143,7 +143,7 @@ public class BungeeServer extends Plugin{
         public void execute(CommandSender cs, String[] strings) {
             if(!cs.hasPermission("admin"))return;
             if(strings.length==0){
-                cs.sendMessage("[RedisPipe] Host:"+Host+":"+Port);
+                cs.sendMessage("[RedisPipe] Host:"+Host+":"+Port+"State:"+数据库.isConnected());
                 cs.sendMessage("[RedisPipe] /rp [ip] <port=6379> link database server!");
                 cs.sendMessage("[RedisPipe] /rp save Save ip&port Data!");
                 return;
