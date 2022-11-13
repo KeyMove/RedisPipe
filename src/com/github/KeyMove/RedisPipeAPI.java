@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import redis.clients.jedis.Jedis;
@@ -39,7 +40,7 @@ public class RedisPipeAPI {
     static String 背包通道="Backpack";
     static List<Player> SendPlayers=new ArrayList<>();
     
-    static Map<String,PlayerInfo> PlayerCache=new HashMap<>();
+    static Map<String,byte[]> PlayerCache=new HashMap<>();
     static List<String> ServerList=new ArrayList<>();
     public static String MessageFormat=null;
     public static String ServerName=null;
@@ -71,14 +72,15 @@ public class RedisPipeAPI {
                 handleThread=new Thread(new Runnable() {
                     @Override
                     public void run() {
+                        messageJedis=pool.get();
                         do{
-                            messageJedis=pool.get();
                             try {
                                 messageJedis.subscribe(handle, channelName);
                             } catch (Exception e) {
+                                
                             }
-                            pool.release(messageJedis);
                         }while(relink);
+                        pool.release(messageJedis);
                     }
                 });
                 handleThread.start();
@@ -89,8 +91,8 @@ public class RedisPipeAPI {
             relink=false;
             if(handleThread!=null)
             {
-                messageJedis.close();
                 handleThread.stop();
+                messageJedis.close();
                 handleThread=null;
             }
         }
@@ -134,10 +136,15 @@ public class RedisPipeAPI {
             ChatHandle=new RedisHandle(聊天通道,new ChannelMessage() {
             @Override
             public void OnMessage(String message) {
+                //System.out.print("[RedisPipe] recvMessage "+message);
                 String[] v=message.split("&");
+                //System.out.print("[RedisPipe] recvMessage 1");
                 if(v.length!=3)return;
+                //System.out.print("[RedisPipe] recvMessage 2");
                 if(v[0].equalsIgnoreCase(ServerName))return;
-                Bukkit.broadcastMessage(MessageFormat.replace("%server%", v[0]).replace("%player%", v[1]).replace("%message%", v[2]));
+                String bc=MessageFormat.replace("%server%", v[0]).replace("%player%", v[1]).replace("%message%", v[2]);
+                //System.out.print("[RedisPipe] recvMessage "+bc);
+                Bukkit.getServer().broadcastMessage(bc);
             }
         });
         if(BackackHandle==null)
@@ -153,17 +160,32 @@ public class RedisPipeAPI {
                 Jedis js=pool.get();
                 if(js==null)return;
                 byte[] pdata=js.get(("PlayerData-"+v[0]).getBytes());
+                System.out.print("[RedisPipe] PlayerData-"+v[0]);
                 if(pdata==null){pool.release(js);return;}
-                PlayerInfo info=PlayerInfo.ArrayPlayer(pdata, new PlayerInfo());
                 Player p=Bukkit.getPlayer(v[0]);
                 if(p==null)
                 {   
-                    PlayerCache.put(v[0], info);
+                    boolean b=false;
+                    for(OfflinePlayer op:Bukkit.getOfflinePlayers()){
+                        if(op.getName().equalsIgnoreCase(v[0])){
+                            System.out.print("[RedisPipe] find ["+op.getName()+"] UUID: "+op.getUniqueId().toString());
+                            PlayerInfo.saveData( op.getUniqueId().toString(), pdata);
+                            b=true;
+                            break;
+                        }
+                    }
+                    if(!b){
+                        System.out.print("[RedisPipe] new Player ["+v[0]+"]");
+                        String uuid=js.get("UUID-"+v[0]);
+                        PlayerInfo.saveData( uuid, pdata);
+                    }
+                    //PlayerCache.put(v[0], pdata);
                     js.publish("tpplayer", message).intValue();
-                    //System.out.print("send tp");
+                    System.out.print("[RedisPipe] send tp");
+                    
                 }
                 else{
-                    info.toPlayer(p);
+                    PlayerInfo.load(pdata,p);
                 }
                 pool.release(js);
             }
@@ -222,9 +244,9 @@ public class RedisPipeAPI {
     public void PlayerBackpack(Player p){
         if(PlayerCache.containsKey(p.getName())){
             System.out.println("缓存同步");
-            PlayerInfo inf=PlayerCache.get(p.getName());
+            byte[] inf=PlayerCache.get(p.getName());
             //System.out.println(inf);
-            inf.toPlayer(p);
+            PlayerInfo.load(inf, p);
             PlayerCache.remove(p.getName());
         }
         else{
@@ -238,10 +260,12 @@ public class RedisPipeAPI {
         if(js==null)return false;
         byte[] keys=("PlayerData-"+p.getName()).getBytes();
         try {
+            js.set("UUID-"+p.getName(),p.getUniqueId().toString());
             js.del(keys);
             while(js.exists(keys));
-            js.set(keys, PlayerInfo.PlayerArray(p));
+            js.set(keys, PlayerInfo.save(p));
             while(!js.exists(keys));
+            
             js.disconnect();
             pool.release(js);
         } catch (Exception e) {
@@ -257,8 +281,7 @@ public class RedisPipeAPI {
         try {
             byte[] arrays=js.get(("PlayerData-"+p.getName()).getBytes());
             if(arrays!=null){
-                PlayerInfo info=PlayerInfo.ArrayPlayer(arrays, new PlayerInfo());
-                info.toPlayer(p);
+                PlayerInfo.load(arrays, p);
             }
             pool.release(js);
         } catch (Exception e) {
@@ -269,52 +292,6 @@ public class RedisPipeAPI {
     }
     
     
-    public void SaveItemStack(String name,ItemStack item){
-        if(!Check())return;
-        try {
-            ByteArrayOutputStream b=new ByteArrayOutputStream();
-            DataOutputStream d=new DataOutputStream(b);
-            NBTCoder.ItemStackArray(item, d);
-            d.flush();
-            database.set(name.getBytes(), b.toByteArray());
-            b.close();
-            d.close();
-        } catch (IOException ex) {
-            Logger.getLogger(RedisPipeAPI.class.getName()).log(Level.SEVERE, null, ex);
-        }
-    }
-    
-    public void SaveItemStack(String name,ItemStack item,Runnable action){
-        if(!Check())return;
-        try {
-            ByteArrayOutputStream b=new ByteArrayOutputStream();
-            DataOutputStream d=new DataOutputStream(b);
-            NBTCoder.ItemStackArray(item, d);
-            d.flush();
-            database.set(name.getBytes(), b.toByteArray());
-            b.close();
-            d.close();
-        } catch (IOException ex) {
-            Logger.getLogger(RedisPipeAPI.class.getName()).log(Level.SEVERE, null, ex);
-        }
-    }
-    
-    public ItemStack LoadItemStack(String name){
-        if(!Check())return null;
-        try {
-            byte[] data=database.get(name.getBytes());
-            if(data==null)return null;
-            ByteArrayInputStream ib=new ByteArrayInputStream(data);
-            DataInputStream id=new DataInputStream(ib);
-            ItemStack item=NBTCoder.ArrayItemStack(id);
-            ib.close();
-            id.close();
-            return item;
-        } catch (IOException ex) {
-            Logger.getLogger(RedisPipeAPI.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return null;
-    }
     
     public int sendPlayer(Player player,String ServerName){
         if(!Check())return -1;

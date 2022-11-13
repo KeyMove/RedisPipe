@@ -129,6 +129,7 @@ public class BungeeServer extends Plugin{
                 player.sendMessage("§c无法传送到目标服务器!");
                 return;
             }
+            out.print("Player ["+player.getName()+"] Server ["+servername+"]!");
             player.connect(info);
         }
     }

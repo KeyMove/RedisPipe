@@ -1,0 +1,5 @@
+## YAML Template.
+---
+name: RedisPipe
+main: com.github.KeyMove.BungeeServer
+version: 1.0.0

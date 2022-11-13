@@ -8,12 +8,21 @@ package com.github.KeyMove;
 
 import com.github.KeyMove.Tools.IP138;
 import com.github.KeyMove.Tools.NBTCoder;
+import com.github.KeyMove.Tools.PlayerInfo;
 import java.io.File;
 import java.io.IOException;
 import static java.lang.System.out;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import static org.bukkit.Bukkit.getServer;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -22,6 +31,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -45,7 +55,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
     YamlConfiguration 配置文件;
     int linkcount=0;
     
-    
+    List<String> noSave=new ArrayList();
     
     public static RedisPipeAPI getInstance(){
         return 数据库API;
@@ -163,8 +173,29 @@ public class RedisPipe extends JavaPlugin implements Listener{
         
         return false;
     }
+    private Location safeLocation;
+    
+    void loadPosData(String posdata){
+        if(posdata==null){
+            newLoc();
+            return;
+        }
+        String[] dt=posdata.split(",");
+        if(dt.length!=4){
+            newLoc();
+            return;
+        }
+        try{
+            World w0=getServer().getWorld(UUID.fromString(dt[0]));
+            safeLocation=new Location(w0,Integer.parseInt(dt[1]), Integer.parseInt(dt[2]), Integer.parseInt(dt[3]));
+        }
+        catch(Exception e){
+            newLoc();
+        }
+    }
     
     public boolean Init(){
+        PlayerInfo.init();
         File 文件=new File(getDataFolder(),"config.yml");
         if(!文件.exists()){
             saveDefaultConfig();
@@ -178,6 +209,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
         RedisPipeAPI.背包同步=配置文件.getBoolean("ServerBackpack");
         RealIP=配置文件.getBoolean("RealIP");
         CoverFlag=配置文件.getBoolean("CoverServer");
+        loadPosData(配置文件.getString("SpwanPoint"));
         return Link(Host,Port,false);
     }
     
@@ -211,7 +243,9 @@ public class RedisPipe extends JavaPlugin implements Listener{
             if(数据库API!=null)
                 数据库API.Chat(e.getPlayer(), e.getMessage());    
     }
+    /*
     @EventHandler void LoginEvent(PlayerLoginEvent e){
+        
         if(RedisPipeAPI.背包同步)
             if(数据库API!=null)
             {
@@ -222,15 +256,20 @@ public class RedisPipe extends JavaPlugin implements Listener{
                         数据库API.PlayerBackpack(e.getPlayer());
                         log("同步背包完成!");
                     }
-                }, 1);
+                }, 50);
                 //e.getPlayer().getInventory().setItem(1, new ItemStack(Material.IRON_AXE));
                 log("开始同步背包");
             }
-    }
+        
+    }*/
     @EventHandler void QuitEvent(PlayerQuitEvent e){
         if(RedisPipeAPI.背包同步)
             if(数据库API!=null)
             {
+                if(noSave.contains(e.getPlayer().getName())){
+                    noSave.remove(e.getPlayer().getName());
+                    return;
+                }
                 getServer().getScheduler().runTask(this, new Runnable() {
 
                     @Override
@@ -273,21 +312,60 @@ public class RedisPipe extends JavaPlugin implements Listener{
         sender.sendMessage("[RedisPipe] 输入/rp link <ip> <port>连接数据库");
         sender.sendMessage("[RedisPipe] 输入/rp server [Name] 设置服务器名称");
         sender.sendMessage("[RedisPipe] 输入/rp save [Name] 保存配置");
+        sender.sendMessage("[RedisPipe] 输入/rp setspawn <PlayerName> 以指定玩家位置设置出生点");
+        
     }
     
     void tphelp(CommandSender sender){
-        sender.sendMessage("[RedisPipe] 输入/rptp [玩家] [服务器]");
+        sender.sendMessage("[RedisPipe] 输入/rptp [服务器] 传送到目标服务器");
+        sender.sendMessage("[RedisPipe] 输入/rptp [玩家] [服务器] 传送玩家到目标服务器");
         sender.sendMessage("[RedisPipe] 或者输入输入/rptp [玩家] [服务器IP] [服务器端口]");
     }
     
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        Player p;
+        String servername;
+        if("rptp".equals(label)){
+            if(!数据库.isConnected()){
+                sender.sendMessage("[RedisPipe] 数据库未连接!");
+                return false;
+            }
+            //sender.sendMessage("[RedisPipe] t1");
+            if(args.length==1){
+                if(sender instanceof Player){
+                    p=(Player)sender;
+                    servername=args[0];
+                    if(p.hasPermission("rptp.notp")&&!p.isOp()){
+                        sender.sendMessage("[RedisPipe] 没有足够的权限操作");
+                        return false;
+                    }
+                    //sender.sendMessage("[RedisPipe] t2");
+                    if(RedisPipeAPI.ServerName.equalsIgnoreCase(servername)){
+                        sender.sendMessage("[RedisPipe] 当前服务器["+servername+"]");
+                        return false;
+                    }
+                    if(!数据库API.Servers(servername)){
+                        sender.sendMessage("[RedisPipe] 未发现该服务器");
+                        return false;
+                    }
+                    //sender.sendMessage("[RedisPipe] t3");
+                    if(RedisPipeAPI.背包同步){
+                        //sender.sendMessage("[RedisPipe] t4");
+                        SendPlayer(p, servername);
+                        //sender.sendMessage("[RedisPipe] t5");
+                    }else{
+                        数据库API.sendPlayer(p, servername);
+                    }
+                }
+                return true;
+            }
+        }
         if(!sender.hasPermission("op"))
         {
             sender.sendMessage("没有足够的权限操作");
             return false;
         }
-        //log(label);
         if("rptp".equals(label)){
             if(!数据库.isConnected()){
                 sender.sendMessage("[RedisPipe] 数据库未连接!");
@@ -297,8 +375,8 @@ public class RedisPipe extends JavaPlugin implements Listener{
                 tphelp(sender);
                 return true;
             }
-            Player p=getServer().getPlayer(args[0]);
-            String servername=args[1];
+            p=getServer().getPlayer(args[0]);
+            servername=args[1];
             if(p==null){
                 sender.sendMessage("[RedisPipe] 未找到该玩家");
                 return true;
@@ -314,31 +392,55 @@ public class RedisPipe extends JavaPlugin implements Listener{
             }
             else
             {
+                if(RedisPipeAPI.ServerName.equalsIgnoreCase(servername)){
+                    sender.sendMessage("[RedisPipe] 当前服务器["+servername+"]");
+                    return false;
+                }
                 if(!数据库API.Servers(servername)){
                     sender.sendMessage("[RedisPipe] 未发现该服务器");
                     return false;
                 }
                 if(RedisPipeAPI.背包同步){
-                    getServer().getScheduler().runTask(this, new Runnable() {
-                        @Override
-                        public void run() {
-                            log("同步数据");
-                            数据库API.sendPlayer(p, servername);
-                            log("同步数据完成");
-                        }
-                    });
+                    SendPlayer(p, servername);
                 }else{
                     数据库API.sendPlayer(p, servername);
                 }
                 return true;
             }
         }
+        //log(label);
         if(args.length<1)
         {
             help(sender);
             return true;
         }
             switch(args[0]){
+                case "setspawn":
+                    
+                    if(args.length>1){
+                        safeLocation=getServer().getPlayer(args[1]).getLocation();
+                        saveSpwanPoint();
+                        sender.sendMessage("设置成功!");
+                    }
+                    else if(sender instanceof Player){
+                        safeLocation=((Player)sender).getLocation();
+                        saveSpwanPoint();
+                        sender.sendMessage("设置成功!");
+                    }
+                    else{
+                        sender.sendMessage("[RedisPipe] 输入/rp setspawn <PlayerName> 以指定玩家位置设置出生点");
+                    }
+                    break;
+                case "load":
+                    if(args.length==2)
+                    {
+                        p=getServer().getPlayer(args[1]);
+                        数据库API.LoadPlayer(p);
+                        sender.sendMessage("重新加载玩家背包 ["+args[1]+"] !");
+                        return false;
+                    }
+                    break;
+                
                 case "reload": Init(); break;
                 case "ip":
                 try {
@@ -411,18 +513,43 @@ public class RedisPipe extends JavaPlugin implements Listener{
                     配置文件.set("Host", Host);
                     配置文件.set("Port", Port);
                     配置文件.set("ServerName", RedisPipeAPI.ServerName);
-        try {
-            配置文件.save(new File(getDataFolder(),"config.yml"));
-            sender.sendMessage("保存完成");
-        } catch (IOException ex) {
-            sender.sendMessage("保存失败");
-        }
+                    saveSpwanPoint();
+                    sender.sendMessage("保存完成");
                     break;
                 default:
                     help(sender);
                 break;
             }
         return true;
+    }
+
+    private void SendPlayer(Player p, String servername) throws IllegalArgumentException {
+        noSave.add(p.getName());
+        p.setNoDamageTicks(60);
+        getServer().getScheduler().runTask(this, new Runnable() {
+            @Override
+            public void run() {
+                log("同步数据");
+                数据库API.sendPlayer(p, servername);
+                log("同步数据完成");
+            }
+        });
+    }
+
+    void saveSpwanPoint(){
+        配置文件.set("SpwanPoint", safeLocation.getWorld().getUID().toString()+","+safeLocation.getBlockX()+","+safeLocation.getBlockY()+","+safeLocation.getBlockZ());
+        PlayerInfo.setSpawnPoint(safeLocation);
+        try {
+            配置文件.save(new File(getDataFolder(),"config.yml"));
+        } catch (IOException ex) {
+            Logger.getLogger(RedisPipe.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+    private void newLoc() {
+        World w0=((World)getServer().getWorlds().get(0));
+        safeLocation=w0.getSpawnLocation();
+        safeLocation.setY(w0.getHighestBlockYAt(w0.getSpawnLocation()));
+        saveSpwanPoint();
     }
     
     public static void main(String[] args) {

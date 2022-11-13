@@ -6,22 +6,28 @@
 
 package com.github.KeyMove.Tools;
 
-import java.io.Serializable;
+import java.util.UUID;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
+
 
 /**
  *
  * @author Administrator
  */
-public class PlayerData implements Serializable{
-    public byte[] 头;
-    public byte[] 衣服;
-    public byte[] 腿部;
-    public byte[] 鞋子;
-    public byte[][] 物品栏;
-    public byte [][] 末影箱;
-    public int[] 药水效果;
-    public double[] 生命值;
-    public int 饱食度;
-    public int 等级;
-    public float 经验值;
+public class PlayerData{
+    Location safeLocation;
+    UUID UUIDWorld;
+    public byte[] save(Player p){
+        return null;
+    }
+    
+    public void load(byte[] bytes,Player p){
+    
+    }
+    
+    public void saveUUID(String uuid,byte[] data){
+        
+    }
+    
 }
