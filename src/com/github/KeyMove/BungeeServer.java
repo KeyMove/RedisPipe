@@ -18,6 +18,7 @@ import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.md_5.bungee.api.*;
@@ -74,7 +75,7 @@ public class BungeeServer extends Plugin{
             String[] data=message.split(",");
             String playername=data[0];
             String servername=data[1];
-            ProxiedPlayer player=ProxyServer.getInstance().getPlayer(playername);
+            ProxiedPlayer player=ProxyServer.getInstance().getPlayer(UUID.fromString(playername));
             if(player==null){
                 out.print("Not Find Player ["+playername+"]!");
                 return;

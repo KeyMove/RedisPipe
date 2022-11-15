@@ -6,23 +6,7 @@
 
 package com.github.KeyMove.Tools;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
-import org.bukkit.Location;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
+import java.util.UUID;
 
 /**
  *
@@ -32,24 +16,27 @@ public class PlayerInfo{
     
     public static PlayerData dt;
     
-    public static void init(){
-        dt=new PlayerData12();
+    public static void init(boolean mod){
+        if(mod)
+            dt=new PlayerData12();
+        else
+            dt=new PlayerDataVanilla();
     }
     
-    public static void setSpawnPoint(Location spawnPoint){
-        dt.safeLocation=spawnPoint;
+    public static void setSpawnPoint(UUID world,int x,int y,int z){
+        dt.setSpawn(world, x, y, z);
     }
     
-    public static byte[] save(Player p){
+    public static byte[] save(UUID p){
         return dt.save(p);
     }
     
-    public static void load(byte [] arrays,Player player){
+    public static void load(byte [] arrays,UUID player){
         dt.load(arrays, player);
     }
     
     
-    public static void saveData(String uuid,byte[] data){
+    public static void saveData(UUID uuid,byte[] data){
         dt.saveUUID(uuid,data);
     }
     

@@ -5,23 +5,12 @@
  */
 
 package com.github.KeyMove;
-import com.github.KeyMove.Tools.NBTCoder;
 import com.github.KeyMove.Tools.PlayerInfo;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
+import java.util.UUID;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPubSub;
 
@@ -38,14 +27,13 @@ public class RedisPipeAPI {
     static String 聊天通道="Chat";
     static RedisHandle BackackHandle;
     static String 背包通道="Backpack";
-    static List<Player> SendPlayers=new ArrayList<>();
     
     static Map<String,byte[]> PlayerCache=new HashMap<>();
     static List<String> ServerList=new ArrayList<>();
     public static String MessageFormat=null;
     public static String ServerName=null;
     
-    abstract class ChannelMessage{
+    public static abstract class ChannelMessage{
         abstract public void OnMessage(String message);
     }
     
@@ -101,10 +89,10 @@ public class RedisPipeAPI {
     
     
     
-    public void Chat(Player p, String message){
+    public void Chat(String p, String message){
         if(聊天同步){
             if(!Check())return;
-            database.publish(聊天通道, ServerName+"&"+p.getName()+"&"+message.replace("&", "§"));
+            database.publish(聊天通道, ServerName+"&"+p+"&"+message.replace("&", "§"));
         }
     }
     
@@ -127,69 +115,15 @@ public class RedisPipeAPI {
         return false;
         
     }
-            
+
     
-    public RedisPipeAPI(RedisPool p){
+    public RedisPipeAPI(RedisPool p,ChannelMessage ch聊天通道,ChannelMessage ch背包通道){
         pool=p;
         database=pool.get();
         if(ChatHandle==null)
-            ChatHandle=new RedisHandle(聊天通道,new ChannelMessage() {
-            @Override
-            public void OnMessage(String message) {
-                //System.out.print("[RedisPipe] recvMessage "+message);
-                String[] v=message.split("&");
-                //System.out.print("[RedisPipe] recvMessage 1");
-                if(v.length!=3)return;
-                //System.out.print("[RedisPipe] recvMessage 2");
-                if(v[0].equalsIgnoreCase(ServerName))return;
-                String bc=MessageFormat.replace("%server%", v[0]).replace("%player%", v[1]).replace("%message%", v[2]);
-                //System.out.print("[RedisPipe] recvMessage "+bc);
-                Bukkit.getServer().broadcastMessage(bc);
-            }
-        });
+            ChatHandle=new RedisHandle(聊天通道,ch聊天通道);
         if(BackackHandle==null)
-            BackackHandle=new RedisHandle(背包通道, new ChannelMessage() {
-            @Override
-            public void OnMessage(String message) {
-                String[] v=message.split(",");
-                if(v.length!=2)return;
-                //System.out.print(v[0]);
-                //System.out.print(v[1]);
-                if(!v[1].equalsIgnoreCase(ServerName))return;
-                //Check();
-                Jedis js=pool.get();
-                if(js==null)return;
-                byte[] pdata=js.get(("PlayerData-"+v[0]).getBytes());
-                System.out.print("[RedisPipe] PlayerData-"+v[0]);
-                if(pdata==null){pool.release(js);return;}
-                Player p=Bukkit.getPlayer(v[0]);
-                if(p==null)
-                {   
-                    boolean b=false;
-                    for(OfflinePlayer op:Bukkit.getOfflinePlayers()){
-                        if(op.getName().equalsIgnoreCase(v[0])){
-                            System.out.print("[RedisPipe] find ["+op.getName()+"] UUID: "+op.getUniqueId().toString());
-                            PlayerInfo.saveData( op.getUniqueId().toString(), pdata);
-                            b=true;
-                            break;
-                        }
-                    }
-                    if(!b){
-                        System.out.print("[RedisPipe] new Player ["+v[0]+"]");
-                        String uuid=js.get("UUID-"+v[0]);
-                        PlayerInfo.saveData( uuid, pdata);
-                    }
-                    //PlayerCache.put(v[0], pdata);
-                    js.publish("tpplayer", message).intValue();
-                    System.out.print("[RedisPipe] send tp");
-                    
-                }
-                else{
-                    PlayerInfo.load(pdata,p);
-                }
-                pool.release(js);
-            }
-        });
+            BackackHandle=new RedisHandle(背包通道, ch背包通道);
         
         if(聊天同步){
             ChatHandle.Stop();
@@ -241,13 +175,13 @@ public class RedisPipeAPI {
         BackackHandle.Stop();
     }
     
-    public void PlayerBackpack(Player p){
-        if(PlayerCache.containsKey(p.getName())){
+    public void PlayerBackpack(UUID p){
+        if(PlayerCache.containsKey(p)){
             System.out.println("缓存同步");
-            byte[] inf=PlayerCache.get(p.getName());
+            byte[] inf=PlayerCache.get(p);
             //System.out.println(inf);
             PlayerInfo.load(inf, p);
-            PlayerCache.remove(p.getName());
+            PlayerCache.remove(p);
         }
         else{
             System.out.println("数据库同步");
@@ -255,12 +189,11 @@ public class RedisPipeAPI {
         }
     }
     
-    public boolean SavePlayer(Player p){
+    public boolean SavePlayer(UUID p){
         Jedis js=pool.get();
         if(js==null)return false;
-        byte[] keys=("PlayerData-"+p.getName()).getBytes();
+        byte[] keys=("PlayerData-"+p).getBytes();
         try {
-            js.set("UUID-"+p.getName(),p.getUniqueId().toString());
             js.del(keys);
             while(js.exists(keys));
             js.set(keys, PlayerInfo.save(p));
@@ -275,11 +208,11 @@ public class RedisPipeAPI {
         return true;
     }
     
-    public boolean LoadPlayer(Player p){
+    public boolean LoadPlayer(UUID p){
         Jedis js=pool.get();
         if(js==null)return false;
         try {
-            byte[] arrays=js.get(("PlayerData-"+p.getName()).getBytes());
+            byte[] arrays=js.get(("PlayerData-"+p).getBytes());
             if(arrays!=null){
                 PlayerInfo.load(arrays, p);
             }
@@ -293,23 +226,24 @@ public class RedisPipeAPI {
     
     
     
-    public int sendPlayer(Player player,String ServerName){
+    public int sendPlayer(UUID player,String ServerName){
         if(!Check())return -1;
         if(背包同步)
         {
             //System.out.println("保存");
             SavePlayer(player);
-            //System.out.println("发送");
-            return database.publish(背包通道, player.getName()+","+ServerName).intValue();
+            System.out.println("发送: "+player+","+ServerName);
+            return database.publish(背包通道, player+","+ServerName).intValue();
         }
         else{
-            return database.publish("tpplayer", player.getName()+","+ServerName).intValue();
+            System.out.println("直接传送玩家: "+player+","+ServerName);
+            return database.publish("tpplayer", player+","+ServerName).intValue();
         }
     }
     
-    public int sendPlayer(Player player,String addr,int port){
+    public int sendPlayer(UUID player,String addr,int port){
         if(!Check())return -1;
-        return database.publish("tpplayer", player.getName()+","+addr+","+port).intValue();
+        return database.publish("tpplayer", player+","+addr+","+port).intValue();
     }
     
     

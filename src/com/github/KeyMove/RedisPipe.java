@@ -6,6 +6,9 @@
 
 package com.github.KeyMove;
 
+import com.github.KeyMove.RedisPipeAPI.ChannelMessage;
+import static com.github.KeyMove.RedisPipeAPI.MessageFormat;
+import static com.github.KeyMove.RedisPipeAPI.ServerName;
 import com.github.KeyMove.Tools.IP138;
 import com.github.KeyMove.Tools.NBTCoder;
 import com.github.KeyMove.Tools.PlayerInfo;
@@ -13,15 +16,13 @@ import java.io.File;
 import java.io.IOException;
 import static java.lang.System.out;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import static org.bukkit.Bukkit.getServer;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -30,10 +31,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.event.player.PlayerLoginEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import redis.clients.jedis.*;
 /**
@@ -41,14 +38,14 @@ import redis.clients.jedis.*;
  * @author Administrator
  */
 public class RedisPipe extends JavaPlugin implements Listener{
-    static RedisPool pool;
-    static Jedis 数据库=new Jedis();
-    static RedisPipeAPI 数据库API=null;
+    public static RedisPool pool;
+    public static Jedis 数据库=new Jedis();
+    public static RedisPipeAPI 数据库API=null;
     
-    static String Host;
-    static int Port;
-    static String localaddr=null;
-    static int localport=25565;
+    public static String Host;
+    public static int Port;
+    public static String localaddr=null;
+    public static int localport=25565;
     
     static boolean CoverFlag=false;
     static boolean RealIP=false;
@@ -156,7 +153,61 @@ public class RedisPipe extends JavaPlugin implements Listener{
             }
         log("数据库初始化成功!");
         if(数据库API==null)
-            数据库API=new RedisPipeAPI(pool);
+            数据库API=new RedisPipeAPI(pool,new ChannelMessage() {
+            @Override
+            public void OnMessage(String message) {
+                //System.out.print("[RedisPipe] recvMessage "+message);
+                String[] v=message.split("&");
+                //System.out.print("[RedisPipe] recvMessage 1");
+                if(v.length!=3)return;
+                //System.out.print("[RedisPipe] recvMessage 2");
+                if(v[0].equalsIgnoreCase(ServerName))return;
+                String bc=MessageFormat.replace("%server%", v[0]).replace("%player%", v[1]).replace("%message%", v[2]);
+                //System.out.print("[RedisPipe] recvMessage "+bc);
+                Bukkit.getServer().broadcastMessage(bc);
+            }
+        },
+            new ChannelMessage() {
+            @Override
+            public void OnMessage(String message) {
+                String[] v=message.split(",");
+                if(v.length!=2)return;
+                //System.out.print(v[0]);
+                //System.out.print(v[1]);
+                if(!v[1].equalsIgnoreCase(ServerName))return;
+                //Check();
+                Jedis js=pool.get();
+                if(js==null)return;
+                byte[] pdata=js.get(("PlayerData-"+v[0]).getBytes());
+                System.out.print("[RedisPipe] PlayerData-"+v[0]);
+                if(pdata==null){pool.release(js);return;}
+                Player p=Bukkit.getPlayer(v[0]);
+                if(p==null)
+                {   
+                    boolean b=false;
+                    for(OfflinePlayer op:Bukkit.getOfflinePlayers()){
+                        if(op.getUniqueId().toString().equalsIgnoreCase(v[0])){
+                            System.out.print("[RedisPipe] find ["+op.getName()+"] UUID: "+op.getUniqueId().toString());
+                            PlayerInfo.saveData( op.getUniqueId(), pdata);
+                            b=true;
+                            break;
+                        }
+                    }
+                    if(!b){
+                        System.out.print("[RedisPipe] new Player ["+v[0]+"]");
+                        PlayerInfo.saveData( UUID.fromString(v[0]), pdata);
+                    }
+                    //PlayerCache.put(v[0], pdata);
+                    js.publish("tpplayer", message).intValue();
+                    System.out.print("[RedisPipe] send tp");
+                    
+                }
+                else{
+                    PlayerInfo.load(pdata,p.getUniqueId());
+                }
+                pool.release(js);
+            }
+        });
         else
             数据库API.NewPool(pool);
         if(RedisPipeAPI.聊天同步){
@@ -195,7 +246,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
     }
     
     public boolean Init(){
-        PlayerInfo.init();
+        PlayerInfo.init(false);
         File 文件=new File(getDataFolder(),"config.yml");
         if(!文件.exists()){
             saveDefaultConfig();
@@ -213,7 +264,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
         return Link(Host,Port,false);
     }
     
-    void UpdateServerInfo(String name){
+    public static void UpdateServerInfo(String name){
         if(数据库.isConnected()){
             数据库.lrem("server", 0, RedisPipeAPI.ServerName);
             RedisPipeAPI.ServerName=name;
@@ -241,7 +292,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
     @EventHandler void ChatEvent(AsyncPlayerChatEvent e){
         if(RedisPipeAPI.聊天同步)
             if(数据库API!=null)
-                数据库API.Chat(e.getPlayer(), e.getMessage());    
+                数据库API.Chat(e.getPlayer().getName(), e.getMessage());    
     }
     /*
     @EventHandler void LoginEvent(PlayerLoginEvent e){
@@ -261,7 +312,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
                 log("开始同步背包");
             }
         
-    }*/
+    }
     @EventHandler void QuitEvent(PlayerQuitEvent e){
         if(RedisPipeAPI.背包同步)
             if(数据库API!=null)
@@ -281,7 +332,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
                 log("开始保存背包");
             }
     }
-    
+    */
     @Override
     public void onEnable() {
         Init();
@@ -355,7 +406,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
                         SendPlayer(p, servername);
                         //sender.sendMessage("[RedisPipe] t5");
                     }else{
-                        数据库API.sendPlayer(p, servername);
+                        数据库API.sendPlayer(p.getUniqueId(), servername);
                     }
                 }
                 return true;
@@ -384,7 +435,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
             if(args.length>=3){
                 try {
                     int port=Integer.parseInt(args[2]);
-                    数据库API.sendPlayer(p, servername, port);
+                    数据库API.sendPlayer(p.getUniqueId(), servername, port);
                 } catch (NumberFormatException e) {
                     sender.sendMessage("[RedisPipe] 端口输入错误");
                 }
@@ -403,7 +454,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
                 if(RedisPipeAPI.背包同步){
                     SendPlayer(p, servername);
                 }else{
-                    数据库API.sendPlayer(p, servername);
+                    数据库API.sendPlayer(p.getUniqueId(), servername);
                 }
                 return true;
             }
@@ -435,7 +486,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
                     if(args.length==2)
                     {
                         p=getServer().getPlayer(args[1]);
-                        数据库API.LoadPlayer(p);
+                        数据库API.LoadPlayer(p.getUniqueId());
                         sender.sendMessage("重新加载玩家背包 ["+args[1]+"] !");
                         return false;
                     }
@@ -530,7 +581,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
             @Override
             public void run() {
                 log("同步数据");
-                数据库API.sendPlayer(p, servername);
+                数据库API.sendPlayer(p.getUniqueId(), servername);
                 log("同步数据完成");
             }
         });
@@ -538,7 +589,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
 
     void saveSpwanPoint(){
         配置文件.set("SpwanPoint", safeLocation.getWorld().getUID().toString()+","+safeLocation.getBlockX()+","+safeLocation.getBlockY()+","+safeLocation.getBlockZ());
-        PlayerInfo.setSpawnPoint(safeLocation);
+        PlayerInfo.setSpawnPoint(safeLocation.getWorld().getUID(),safeLocation.getBlockX(),safeLocation.getBlockY(),safeLocation.getBlockZ());
         try {
             配置文件.save(new File(getDataFolder(),"config.yml"));
         } catch (IOException ex) {

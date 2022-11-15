@@ -7,8 +7,6 @@
 package com.github.KeyMove.Tools;
 
 import java.util.UUID;
-import org.bukkit.Location;
-import org.bukkit.entity.Player;
 
 
 /**
@@ -16,17 +14,23 @@ import org.bukkit.entity.Player;
  * @author Administrator
  */
 public class PlayerData{
-    Location safeLocation;
+    int x,y,z;
     UUID UUIDWorld;
-    public byte[] save(Player p){
+    boolean saveFile=true;
+    
+    public void setSpawn(UUID uuid,int x,int y,int z){
+        
+    }
+    
+    public byte[] save(UUID p){
         return null;
     }
     
-    public void load(byte[] bytes,Player p){
+    public void load(byte[] bytes,UUID p){
     
     }
     
-    public void saveUUID(String uuid,byte[] data){
+    public void saveUUID(UUID uuid,byte[] data){
         
     }
     
