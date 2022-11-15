@@ -1,7 +1,7 @@
 # RedisPipe
 [Minecraft Server Plugin]基于Redis的跨服同步插件
 # 开始
-forge服务端放入mods文件夹
+forge服务端放入mods文件夹<BR>
 RedisPipe.jar分别放入BungeeCord的plugins文件夹与Minecraft 1.12.2服务器plugins文件夹<BR>
 Redis服务器默认使用6379端口<BR>
 服务器启动完成后输入 rp server [服务器名称] 指令修改当前服务器名称<BR>
