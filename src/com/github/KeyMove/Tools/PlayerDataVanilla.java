@@ -85,7 +85,7 @@ public class PlayerDataVanilla extends PlayerData {
             ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(data);
             NBTTagCompound nbt=NBTCompressedStreamTools.a(byteArrayInputStream);
             NBTTagCompound oldnbt=null;
-            File f = new File(getServer().getWorldContainer(), "world/playerdata/"+uuid + ".dat");
+            File f = new File("./", "world/playerdata/"+uuid + ".dat");
             //out.print("[RedisPipe] save: "+f);
             if (f.exists())
                 oldnbt=NBTCompressedStreamTools.a(new FileInputStream(f)); 
@@ -140,8 +140,8 @@ public class PlayerDataVanilla extends PlayerData {
             //NBTTagCompound oldnbt=((SaveHandler)(((CraftServer)cp.getServer()).getHandle()).field_72412_k).getPlayerData(uuid);
             if(saveFile){
             //out.print("[RedisPipe] save : "+uuid + ".dat");
-            File file1 = new File(getServer().getWorldContainer(),"world/playerdata/"+uuid+ ".dat.tmp");
-            File file2 = new File(getServer().getWorldContainer(), "world/playerdata/"+uuid + ".dat");
+            File file1 = new File("./","world/playerdata/"+uuid+ ".dat.tmp");
+            File file2 = new File("./", "world/playerdata/"+uuid + ".dat");
             FileOutputStream fs=new FileOutputStream(file1);
             fs.write(data);
             fs.flush();

@@ -33,11 +33,22 @@ public class RedisPipeAPI {
     public static String MessageFormat=null;
     public static String ServerName=null;
     
+    Map<String,RedisHandle> channelMap=new HashMap<>();
+    
     public static abstract class ChannelMessage{
         abstract public void OnMessage(String message);
     }
     
-    class RedisHandle extends JedisPubSub{
+    
+    
+    public RedisHandle RegisterChannel(String ch,ChannelMessage msg){
+        if(channelMap.containsKey(ch))return channelMap.get(ch);
+        RedisHandle handle=new RedisHandle(ch,msg);
+        channelMap.put(ch, handle);
+        return handle;
+    }
+    
+    public class RedisHandle extends JedisPubSub{
         ChannelMessage message;
         Thread handleThread;
         Jedis messageJedis;
@@ -224,7 +235,24 @@ public class RedisPipeAPI {
         return true;
     }
     
+    public int publishMessage(String ch,String message){
+        if(!Check())return -1;
+        return database.publish(ch, message).intValue();
+    }
     
+    public String get(String key){
+        Jedis js=pool.get();
+        String value=js.get(key);
+        pool.release(js);
+        return value;
+    }
+    
+    public String set(String key,String value){
+        Jedis js=pool.get();
+        String v=js.set(key,value);
+        pool.release(js);
+        return v;
+    }
     
     public int sendPlayer(UUID player,String ServerName){
         if(!Check())return -1;

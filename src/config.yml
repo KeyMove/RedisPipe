@@ -16,3 +16,5 @@ ServerBackpack: true
 ServerChatFormat: '[%server%] <%player%> %message%'
 #世界出生点
 SpwanPoint: ''
+#Js
+EnableJS: true

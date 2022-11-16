@@ -9,11 +9,17 @@ package com.github.KeyMove;
 import com.github.KeyMove.RedisPipeAPI.ChannelMessage;
 import static com.github.KeyMove.RedisPipeAPI.MessageFormat;
 import static com.github.KeyMove.RedisPipeAPI.ServerName;
+import static com.github.KeyMove.Tools.BukkitEventsBuild.LoadEvents;
+import com.github.KeyMove.EventsManager.EventManger;
 import com.github.KeyMove.Tools.IP138;
+import com.github.KeyMove.Tools.JSBukkit;
+import com.github.KeyMove.Tools.JSTools;
 import com.github.KeyMove.Tools.NBTCoder;
 import com.github.KeyMove.Tools.PlayerInfo;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import static java.lang.System.out;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +35,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -46,6 +53,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
     public static int Port;
     public static String localaddr=null;
     public static int localport=25565;
+    public static boolean EnableJs=true;
     
     static boolean CoverFlag=false;
     static boolean RealIP=false;
@@ -245,6 +253,8 @@ public class RedisPipe extends JavaPlugin implements Listener{
         }
     }
     
+    
+    
     public boolean Init(){
         PlayerInfo.init(false);
         File 文件=new File(getDataFolder(),"config.yml");
@@ -261,6 +271,7 @@ public class RedisPipe extends JavaPlugin implements Listener{
         RealIP=配置文件.getBoolean("RealIP");
         CoverFlag=配置文件.getBoolean("CoverServer");
         loadPosData(配置文件.getString("SpwanPoint"));
+        EnableJs=配置文件.getBoolean("EnableJS", true);
         return Link(Host,Port,false);
     }
     
@@ -333,6 +344,46 @@ public class RedisPipe extends JavaPlugin implements Listener{
             }
     }
     */
+    
+    void LoadJSFile(){
+        LoadJS(new File(getDataFolder(),"js"));
+    }
+    
+    void LoadJS(File f){
+        for(File mf:f.listFiles()){
+            if(mf.isDirectory()){
+                LoadJS(mf);
+            }
+            else{
+                String p=mf.getAbsolutePath();
+                if(p.endsWith(".js")){
+                    try{
+                        InputStreamReader reader = new InputStreamReader(new FileInputStream(p),"UTF-8");
+                        System.out.println(reader.getEncoding());
+                        JSTools.getInstance().eval(reader);
+                        reader.close();
+                    } catch (Exception e) {
+                            e.printStackTrace();
+                    }
+                }
+            }
+        }
+    }
+        
+    EventManger eventManger;
+    JSBukkit Tools;
+    void LoadJS(){
+        if(!EnableJs)return;
+        eventManger=LoadEvents(this);
+        out.print("Bytecode Load!");
+        out.print(eventManger);
+        eventManger.Setup(this);
+        Tools=new JSBukkit(this, eventManger);
+        //out.print(eventManger);
+        getServer().getPluginManager().registerEvents(eventManger, this);
+        out.print(this.getClass().getTypeName());
+        LoadJSFile();
+    }
     @Override
     public void onEnable() {
         Init();
@@ -341,11 +392,15 @@ public class RedisPipe extends JavaPlugin implements Listener{
         if(NBTCoder.Init()==-1){
             log("初始化物品序列化成功");
         }
+        LoadJS();
     }
 
     @Override
     public void onDisable() {
         Close();
+        HandlerList.unregisterAll(eventManger);
+        eventManger.ClearEvent();
+        Tools.ReInit();
         log("关闭连接");
     }
     
@@ -566,6 +621,11 @@ public class RedisPipe extends JavaPlugin implements Listener{
                     配置文件.set("ServerName", RedisPipeAPI.ServerName);
                     saveSpwanPoint();
                     sender.sendMessage("保存完成");
+                    break;
+                case "reloadjs":
+                    eventManger.ClearEvent();
+                    Tools.ReInit();
+                    LoadJSFile();
                     break;
                 default:
                     help(sender);
