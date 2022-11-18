@@ -175,6 +175,20 @@ public class JSBukkit{
         eventManger.RegisterEvent((String)args[0], (JSObject)args[1]);
     }
     
+    public interface IEV{
+        public void OnEvent(Object e);
+    }
+    Map<Integer,IEV> imap=new HashMap<>();
+    public void testIEV(int id,IEV ev){
+        imap.put(id, ev);
+    }
+    
+    public void callIEV(int id){
+        IEV ev=imap.get(id);
+        if(ev!=null)
+            ev.OnEvent(ev);
+    }
+    
     RedisPipeAPI api;
         
         public Object OnMessage(Object... args){

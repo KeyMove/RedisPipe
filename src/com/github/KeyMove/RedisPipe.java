@@ -350,6 +350,8 @@ public class RedisPipe extends JavaPlugin implements Listener{
     }
     
     void LoadJS(File f){
+        if(f==null)return;
+        if(!f.exists())return;
         for(File mf:f.listFiles()){
             if(mf.isDirectory()){
                 LoadJS(mf);

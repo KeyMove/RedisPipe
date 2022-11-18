@@ -7,29 +7,38 @@ package com.github.KeyMove;
 
 import com.github.KeyMove.RedisPipeAPI.ChannelMessage;
 import static com.github.KeyMove.RedisPipeAPI.MessageFormat;
-import static com.github.KeyMove.RedisPipeAPI.ServerName;
+import com.github.KeyMove.Tools.JSForge;
+import com.github.KeyMove.Tools.JSTools;
 import com.github.KeyMove.Tools.PlayerInfo;
 import com.google.common.collect.Lists;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import static java.lang.System.out;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.script.ScriptEngine;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.launchwrapper.Launch;
+import net.minecraft.launchwrapper.LaunchClassLoader;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.management.PlayerList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.event.ServerChatEvent;
 import net.minecraftforge.fml.common.FMLCommonHandler;
+import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
+import net.minecraftforge.fml.common.ModContainer;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -46,6 +55,7 @@ public class RedisPipeForge {
     public static Jedis 数据库=new Jedis();
     public static RedisPipeAPI 数据库API=null;
     
+    public static boolean EnableJS=true;
     public static String Host;
     public static int Port;
     public static String localaddr=null;
@@ -55,12 +65,31 @@ public class RedisPipeForge {
     
     public static MinecraftServer ms;
     public static PlayerList pl;
+    ScriptEngine engine;
+    static {
+    try {
+        Launch.classLoader.addURL(LaunchClassLoader.getSystemClassLoader().loadClass("jdk.nashorn.api.scripting.NashornScriptEngine").getProtectionDomain().getCodeSource().getLocation());
+      } catch (Throwable ex) {
+        ex.printStackTrace();
+      } 
+    }
+    public RedisPipeForge(){
+        
+        engine=JSTools.getInstance();
+        System.out.println("js:"+engine);
+    }
+    
     static void log(String message){
         out.print("[RedisPipe] "+message);
     }
+    
+    public static RedisPipeAPI getInstance(){
+        return 数据库API;
+    }
+    
     Configuration config;
     void loadconfig(){
-        config=new Configuration(ConfigFile);
+        config=new Configuration(new File(ConfigFile,"config.cfg"));
         Host=config.get("data", "Host", "127.0.0.1","Redis服务器地址").getString();
         Port=config.get("data", "Port", 6379,"Redis服务器端口").getInt();
         RedisPipeAPI.ServerName=config.get("data", "ServerName", "lobby","服务器名称").getString();
@@ -68,6 +97,7 @@ public class RedisPipeForge {
         RedisPipeAPI.MessageFormat=config.get("data", "ServerChatFormat", "'[%server%] <%player%> %message%'","聊天格式").getString();
         RedisPipeAPI.背包同步=config.get("data", "ServerBackpack", true,"是否同步玩家背包").getBoolean();
         MessageFormat=config.get("data", "ServerChatFormat", "'[%server%] <%player%> %message%'","聊天格式").getString();
+        EnableJS=config.get("data", "EnableJS", true,"是否启用JS").getBoolean();
         Close();
         pool=new RedisPool(Host, Port);
         if(!RedisPool.TryConnect(Host,Port,500)){
@@ -98,7 +128,7 @@ public class RedisPipeForge {
                 //MinecraftServer.
                 //Bukkit.getServer().broadcastMessage(bc);
                 if(ms!=null)
-                    ms.func_184103_al().func_148544_a(ITextComponent.Serializer.func_150699_a("{\"text\":\""+bc+"\"}"),true);
+                    ms.func_184103_al().func_148544_a(new TextComponentString(bc),true);// ITextComponent.Serializer.func_150699_a("{\"text\":\""+bc+"\"}"),true);
             }
         },
             new ChannelMessage() {
@@ -132,6 +162,9 @@ public class RedisPipeForge {
             数据库API.StartBackpack();
             log("注册背包同步通道!");
         }
+        
+        
+        
     }
     
     public static void Updatelocaladdr(){
@@ -152,18 +185,51 @@ public class RedisPipeForge {
             }
         }
     }
+    
+    void LoadJSFile(){
+        LoadJS(new File(ConfigFile,"js"));
+    }
+    
+    void LoadJS(File f){
+        if(f==null)return;
+        if(!f.exists())return;
+        for(File mf:f.listFiles()){
+            if(mf.isDirectory()){
+                LoadJS(mf);
+            }
+            else{
+                String p=mf.getAbsolutePath();
+                if(p.endsWith(".js")){
+                    try{
+                        InputStreamReader reader = new InputStreamReader(new FileInputStream(p),"UTF-8");
+                        System.out.println(reader.getEncoding());
+                        JSTools.getInstance().eval(reader);
+                        reader.close();
+                    } catch (Exception e) {
+                            e.printStackTrace();
+                    }
+                }
+            }
+        }
+    }
+    
     File ConfigFile;
+    ModContainer Container;
     @EventHandler
     public void preInit(FMLPreInitializationEvent event){
         //inscall=this;
+        Container=FMLCommonHandler.instance().findContainerFor(this);
         FMLCommonHandler.instance().bus().register(this);
         log.info("[RedisPipe] 加载成功!");
         PlayerInfo.init(true);
-        File f=new File(event.getModConfigurationDirectory(),"redispipe.cfg");
-        ConfigFile=f;
+        ConfigFile=new File(event.getModConfigurationDirectory(),"RedisPipe");
+        if(!ConfigFile.exists())
+            ConfigFile.mkdirs();
+        File f=new File(ConfigFile,"config.cfg");
+        //ConfigFile=f;
         if(!f.exists())
         {
-            config=new Configuration(f=event.getSuggestedConfigurationFile());
+            config=new Configuration(f);
             config.get("data", "Host", "127.0.0.1","Redis服务器地址").set("127.0.0.1");
             config.get("data", "Port", 6379,"Redis服务器端口").set(6379);
             config.get("data", "ServerName", "lobby","服务器名称").set("lobby");
@@ -171,6 +237,7 @@ public class RedisPipeForge {
             config.get("data", "ServerBackpack", true,"是否同步玩家背包").set(true);
             config.get("data", "ServerChatFormat", "[%server%] <%player%> %message%","聊天格式").set("[%server%] <%player%> %message%");
             config.get("data", "SpwanPoint", "","自定义玩家出生点位置").set("");
+            config.get("data", "EnableJS", true,"是否启用JS").set(true);
             config.save();
         }
         loadconfig();
@@ -218,11 +285,11 @@ public class RedisPipeForge {
     }
     public class TPCMD extends CommandBase{
 
-        List<String> cmdlist = Lists.newArrayList("rptp");
         
         @Override
-        public List<String> func_71514_a(){
-            return cmdlist;
+        public int func_82362_a()
+        {
+            return 2;
         }
         
         @Override
@@ -322,6 +389,7 @@ public class RedisPipeForge {
         public void func_184881_a(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
             if(args.length<1)
             {
+                sender.func_145747_a(new TextComponentString("[RedisPipe] 目标服务器"+"Host:"+Host+":"+Port+"服务器名称:"+RedisPipeAPI.ServerName+(数据库.isConnected()?" 已":" 未")+"连接"));
                 sender.func_145747_a(ITextComponent.Serializer.func_150699_a("{\"text\":\"[RedisPipe] /rp server <名称> 重新设定服务器名称\"}"));
                 sender.func_145747_a(ITextComponent.Serializer.func_150699_a("{\"text\":\"[RedisPipe] /rp reload 重载配置文件\"}"));
                 return;
@@ -335,12 +403,16 @@ public class RedisPipeForge {
                         UpdateServerInfo(args[1]);
                     }
                     break;
+                case "reloadjs":
+                    handle.restart();
+                    LoadJSFile();
+                    break;
             }
             //throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
         
     }
-    
+    JSForge handle;
     @EventHandler
     public void start(FMLServerStartingEvent e){
         e.registerServerCommand(new CMD());
@@ -351,6 +423,12 @@ public class RedisPipeForge {
         WorldServer w=ms.field_71305_c[0];
         BlockPos pos=w.func_175694_M();
         PlayerInfo.setSpawnPoint(null  , pos.func_177958_n(), pos.func_177956_o(), pos.func_177952_p()); 
+        
+        if(EnableJS){
+            out.print("Load JS");
+            handle=new JSForge(Container);
+            LoadJSFile();
+        }
     }
     
     @SubscribeEvent

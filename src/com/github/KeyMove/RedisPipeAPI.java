@@ -39,7 +39,9 @@ public class RedisPipeAPI {
         abstract public void OnMessage(String message);
     }
     
-    
+    public String getServerName(){
+        return ServerName;
+    }
     
     public RedisHandle RegisterChannel(String ch,ChannelMessage msg){
         if(channelMap.containsKey(ch))return channelMap.get(ch);

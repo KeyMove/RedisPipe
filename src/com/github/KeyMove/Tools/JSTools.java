@@ -3,24 +3,31 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package com.github.KeyMove.Tools;
-import javax.script.Invocable;
 import javax.script.ScriptContext;
-
 import javax.script.ScriptEngine;
 
-import javax.script.ScriptEngineFactory;
 
 import javax.script.ScriptEngineManager;
 
-import javax.script.ScriptException;
 /**
  *
  * @author KeyMove
  */
 public class JSTools {
-    static ScriptEngine engine = new ScriptEngineManager().getEngineByName("js");
+    static ScriptEngine engine;
     public static ScriptEngine getInstance(){
         //((Invocable)engine).invokeFunction(name, args)
+        if(engine==null){
+            engine = new ScriptEngineManager().getEngineByName("js");
+            try{
+                ScriptContext context = engine.getContext();
+                for (String s : new String[] {  "load", "loadWithNewGlobal", "exit", "quit" })
+                  context.removeAttribute(s, context.getAttributesScope(s)); 
+            }
+            catch (Exception e) {  
+                System.out.print(e);
+            }
+        }
         return engine;
     }
 }

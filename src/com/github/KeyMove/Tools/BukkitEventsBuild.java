@@ -88,7 +88,7 @@ public class BukkitEventsBuild {
         }  
         return l;  
     }
-    static List<String> getPacketAllClass(String path){
+    public static List<String> getPacketAllClass(String path){
         return getPacketClass(path, null);
     }
     
