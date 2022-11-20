@@ -43,6 +43,10 @@ public class RedisPipeAPI {
         return ServerName;
     }
     
+    public String[] getServers(){
+        return (String[]) ServerList.toArray();
+    }
+    
     public RedisHandle RegisterChannel(String ch,ChannelMessage msg){
         if(channelMap.containsKey(ch))return channelMap.get(ch);
         RedisHandle handle=new RedisHandle(ch,msg);

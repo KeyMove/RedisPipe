@@ -4,9 +4,18 @@
  */
 package com.github.KeyMove.Tools;
 
+import com.github.KeyMove.EventForge.SendPlayerEvent;
 import com.github.KeyMove.RedisPipeAPI;
 import com.github.KeyMove.RedisPipeAPI.RedisHandle;
 import com.github.KeyMove.RedisPipeForge;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.ByteToMessageDecoder;
+import io.netty.handler.codec.MessageToByteEncoder;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -61,7 +70,7 @@ public class JSForge {
     
     public Map<String,List<JSRunner>> RedisMessageMap=new HashMap<>();
     public Map<String,RedisPipeAPI.RedisHandle> RedisHandle=new HashMap<>();
-    
+    public Map<ChannelHandler,ChannelPipeline> HandlerList=new HashMap<>();
     public class EventRunner{
         List<JSRunner> list=new ArrayList();
         public void add(JSRunner js){
@@ -258,6 +267,7 @@ public class JSForge {
         //System.out.println(jarFilePath);
         //System.out.println(packagePath);
         List<Class> l=new ArrayList<>();
+        
         File f=new File(jarFilePath+"!/"+packagePath);
         try {  
             //System.out.println(f);
@@ -286,6 +296,48 @@ public class JSForge {
         return l;
     }
     
+    public void ChannelLast(ChannelPipeline pipe,JSRunner js){
+        pipe.addLast(new SimpleChannelInboundHandler() {
+            @Override
+            protected void channelRead0(ChannelHandlerContext chc, Object i) throws Exception {
+                js.run(i);//throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+            }
+        });
+    }
+    
+    public void ChannelLast(ChannelPipeline pipe,String b1,JSRunner js){
+        pipe.addLast(b1,new SimpleChannelInboundHandler() {
+            @Override
+            protected void channelRead0(ChannelHandlerContext chc, Object i) throws Exception {
+                js.run(i);//throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+            }
+        });
+    }
+    
+    public ChannelHandler ChannelBefor(ChannelPipeline pipe,String b1,String b2,JSRunner js){
+        ChannelHandler ch;
+        pipe.addBefore(b1,b2,ch=new SimpleChannelInboundHandler() {
+
+            @Override
+            protected void channelRead0(ChannelHandlerContext chc, Object i) throws Exception {
+                
+                js.run(i);
+                chc.fireChannelRead(i);
+                //throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+            }
+        });
+        HandlerList.put(ch,pipe);
+        return ch;
+    }
+    
+    public void RemoveChannel(ChannelHandler ch){
+        if(HandlerList.containsKey(ch)){
+            HandlerList.get(ch).remove(ch);
+            HandlerList.remove(ch);
+        }
+        
+    }
+    
     public void restart(){
         for(EventRunner er : g_Events.values())
             er.clear();
@@ -301,6 +353,10 @@ public class JSForge {
         g_Commands.clear();
         for(List l : RedisMessageMap.values())
             l.clear();
+        for(ChannelHandler cx:HandlerList.keySet()){
+            HandlerList.get(cx).remove(cx);
+        }
+        HandlerList.clear();
     }
     public JSForge(ModContainer con){
         Container=con;
@@ -337,6 +393,7 @@ public class JSForge {
             eventmap.put(n, c);
             System.out.println(n);
         }
+        eventmap.put("SendPlayerEvent", SendPlayerEvent.class);
         //engine=JSTools.getInstance();
         System.out.println("js:"+engine);
         //engine.getContext().setAttribute("allowAllAccess", true, ScriptContext.ENGINE_SCOPE);

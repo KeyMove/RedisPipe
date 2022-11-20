@@ -27,6 +27,10 @@ public class PlayerInfo{
         dt.setSpawn(world, x, y, z);
     }
     
+    public static void setSpawnPoint(int world,int x,int y,int z){
+        dt.setSpawn(world, x, y, z);
+    }
+    
     public static byte[] save(UUID p){
         return dt.save(p);
     }

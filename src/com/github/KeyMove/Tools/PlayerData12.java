@@ -26,7 +26,11 @@ import net.minecraft.nbt.NBTTagList;
  */
 public class PlayerData12 extends PlayerData{
         
-        
+        @Override
+        public void setSpawn(int dim,int x,int y,int z){
+            this.dim=dim;
+            
+        }
         public PlayerData12(){
             
             /*
@@ -140,6 +144,7 @@ public class PlayerData12 extends PlayerData{
                 //}
                 //UUIDWorld=safeLocation.getWorld().getUID();
                 nbt.func_74782_a("Pos",(NBTBase)func_70087_a(new double[] { x, y, z }));
+                nbt.func_74768_a("Dimension", dim);
                 //nbt.func_74772_a("WorldUUIDLeast",UUIDWorld.getLeastSignificantBits());
                 //nbt.func_74772_a("WorldUUIDMost",UUIDWorld.getMostSignificantBits());
                 //newsh.playercache.put(uuid, nbt);

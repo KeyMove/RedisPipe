@@ -5,6 +5,7 @@
 package com.github.KeyMove;
 
 
+import com.github.KeyMove.EventForge.SendPlayerEvent;
 import com.github.KeyMove.RedisPipeAPI.ChannelMessage;
 import static com.github.KeyMove.RedisPipeAPI.MessageFormat;
 import com.github.KeyMove.Tools.JSForge;
@@ -32,15 +33,16 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.WorldServer;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.event.ServerChatEvent;
 import net.minecraftforge.fml.common.FMLCommonHandler;
-import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.ModContainer;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
+import net.minecraftforge.fml.common.eventhandler.EventBus;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import redis.clients.jedis.Jedis;
 
@@ -66,6 +68,7 @@ public class RedisPipeForge {
     public static MinecraftServer ms;
     public static PlayerList pl;
     ScriptEngine engine;
+    static EventBus bus=MinecraftForge.EVENT_BUS;
     static {
     try {
         Launch.classLoader.addURL(LaunchClassLoader.getSystemClassLoader().loadClass("jdk.nashorn.api.scripting.NashornScriptEngine").getProtectionDomain().getCodeSource().getLocation());
@@ -80,12 +83,17 @@ public class RedisPipeForge {
     }
     
     static void log(String message){
-        out.print("[RedisPipe] "+message);
+        out.println("[RedisPipe] "+message);
     }
     
     public static RedisPipeAPI getInstance(){
         return 数据库API;
     }
+    
+    void setSpawn(String s){
+        
+    }
+    
     
     Configuration config;
     void loadconfig(){
@@ -96,7 +104,8 @@ public class RedisPipeForge {
         RedisPipeAPI.聊天同步=config.get("data", "ServerChat",true,"是否同步聊天内容").getBoolean();
         RedisPipeAPI.MessageFormat=config.get("data", "ServerChatFormat", "'[%server%] <%player%> %message%'","聊天格式").getString();
         RedisPipeAPI.背包同步=config.get("data", "ServerBackpack", true,"是否同步玩家背包").getBoolean();
-        MessageFormat=config.get("data", "ServerChatFormat", "'[%server%] <%player%> %message%'","聊天格式").getString();
+        //MessageFormat=config.get("data", "ServerChatFormat", "'[%server%] <%player%> %message%'","聊天格式").getString();
+        setSpawn(config.get("data", "SpwanPoint", "","自定义玩家出生点位置").getString());
         EnableJS=config.get("data", "EnableJS", true,"是否启用JS").getBoolean();
         Close();
         pool=new RedisPool(Host, Port);
@@ -141,12 +150,15 @@ public class RedisPipeForge {
                 //log.log(Level.INFO,"[RedisPipe] message: "+v[0]);
                 if(!v[1].equalsIgnoreCase(RedisPipeAPI.ServerName))return;
                 //Check();
+                UUID uuidplayer=UUID.fromString(v[0]);
+                //SendPlayerAfter(uuidplayer,RedisPipeAPI.ServerName);
+                bus.post(new SendPlayerEvent(uuidplayer,RedisPipeAPI.ServerName,false));
                 Jedis js=pool.get();
                 if(js==null)return;
                 byte[] pdata=js.get(("PlayerData-"+v[0]).getBytes());
                 log.log(Level.OFF,"[RedisPipe] PlayerData-"+v[0]);
                 if(pdata==null){pool.release(js);return;}
-                PlayerInfo.saveData( UUID.fromString(v[0]), pdata);
+                PlayerInfo.saveData( uuidplayer, pdata);
                 js.publish("tpplayer", message).intValue();
                 //log.log(Level.INFO,"[RedisPipe] send tp");
                 pool.release(js);
@@ -283,6 +295,38 @@ public class RedisPipeForge {
             RedisPipeAPI.ServerName=name;
         }
     }
+    
+    //@Cancelable
+    
+    public static void SendPlayerAfter(UUID mp,String ServerName){
+        
+    }
+    
+    
+    
+    public static void SendPlayerBefor(EntityPlayerMP mp,String ServerName){
+        if(bus.post(new SendPlayerEvent(mp,ServerName,true)))return;
+        //bus.post(new SendPlayer());
+        mp.func_184224_h(true);
+        new Thread(new Runnable(){
+             @Override
+             public void run() {
+                 try {
+                     Thread.sleep(3000);
+                 } catch (InterruptedException ex) {
+                     Logger.getLogger(RedisPipeForge.class.getName()).log(Level.SEVERE, null, ex);
+                 }
+                 ms.func_152344_a(new Runnable() {
+                     @Override
+                     public void run() {
+                         mp.func_184224_h(false);
+                     }
+                 });
+             }
+        }).start();
+        数据库API.sendPlayer(mp.func_110124_au(), ServerName);
+    }
+    
     public class TPCMD extends CommandBase{
 
         
@@ -303,25 +347,7 @@ public class RedisPipeForge {
             return "rptp <Player>";//throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
         
-        void tpproc(EntityPlayerMP mp){
-            mp.func_184224_h(true);
-                        new Thread(new Runnable(){
-                            @Override
-                            public void run() {
-                                try {
-                                    Thread.sleep(3000);
-                                } catch (InterruptedException ex) {
-                                    Logger.getLogger(RedisPipeForge.class.getName()).log(Level.SEVERE, null, ex);
-                                }
-                                ms.func_152344_a(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        mp.func_184224_h(false);
-                                    }
-                                });
-                            }
-                        }).start();
-        }
+        //void tpproc(EntityPlayerMP mp){ }
 
         @Override
         public void func_184881_a(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
@@ -341,12 +367,12 @@ public class RedisPipeForge {
                             sender.func_145747_a(ITextComponent.Serializer.func_150699_a("{\"text\":\"[RedisPipe] 未发现该服务器\"}"));
                             return;
                         }
-                        tpproc((EntityPlayerMP)sender);
-                        数据库API.sendPlayer(((EntityPlayerMP)sender).func_110124_au(), servername);
+                        SendPlayerBefor((EntityPlayerMP)sender,servername);
+                        //tpproc((EntityPlayerMP)sender);
+                        //数据库API.sendPlayer(((EntityPlayerMP)sender).func_110124_au(), servername);
                     }
                     if(args.length>1){
                         String servername=args[0];
-                        
                         if(!数据库API.Servers(servername)){
                             sender.func_145747_a(ITextComponent.Serializer.func_150699_a("{\"text\":\"[RedisPipe] 未发现该服务器\"}"));
                             return;
@@ -356,8 +382,9 @@ public class RedisPipeForge {
                             sender.func_145747_a(ITextComponent.Serializer.func_150699_a("{\"text\":\"[RedisPipe] 未找到该玩家\"}"));
                             return;
                         }
-                        tpproc((EntityPlayerMP)sender);
-                        数据库API.sendPlayer(mp.func_110124_au(), servername);
+                        SendPlayerBefor(mp,servername);
+                        //tpproc(mp);
+                        //数据库API.sendPlayer(mp.func_110124_au(), servername);
                     }
             //throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
@@ -422,7 +449,7 @@ public class RedisPipeForge {
         
         WorldServer w=ms.field_71305_c[0];
         BlockPos pos=w.func_175694_M();
-        PlayerInfo.setSpawnPoint(null  , pos.func_177958_n(), pos.func_177956_o(), pos.func_177952_p()); 
+        PlayerInfo.setSpawnPoint(0  , pos.func_177958_n(), pos.func_177956_o(), pos.func_177952_p()); 
         
         if(EnableJS){
             out.print("Load JS");

@@ -15,10 +15,14 @@ import java.util.UUID;
  */
 public class PlayerData{
     int x,y,z;
+    int dim=0;
     UUID UUIDWorld;
     boolean saveFile=true;
     
     public void setSpawn(UUID uuid,int x,int y,int z){
+        
+    }
+    public void setSpawn(int dim,int x,int y,int z){
         
     }
     
