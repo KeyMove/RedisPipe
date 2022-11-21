@@ -143,7 +143,8 @@ public class RedisPipe extends JavaPlugin implements Listener{
         数据库=pool.get();
         数据库.clientSetname(RedisPipeAPI.ServerName);
         if(localaddr==null)Updatelocaladdr();
-        数据库.lpush("server", RedisPipeAPI.ServerName);
+            if(!数据库.lrange("server", 0, -1).contains(RedisPipeAPI.ServerName))
+                数据库.lpush("server", RedisPipeAPI.ServerName);
             if(!localaddr.contains("127.0.0.1")||!RealIP)
             {
                 数据库.set("serverinfo-"+RedisPipeAPI.ServerName, localaddr+","+localport);

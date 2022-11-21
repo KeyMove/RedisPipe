@@ -29,7 +29,7 @@ public class RedisPipeAPI {
     static String 背包通道="Backpack";
     
     static Map<String,byte[]> PlayerCache=new HashMap<>();
-    static List<String> ServerList=new ArrayList<>();
+    public static List<String> ServerList=new ArrayList<>();
     public static String MessageFormat=null;
     public static String ServerName=null;
     
@@ -43,8 +43,8 @@ public class RedisPipeAPI {
         return ServerName;
     }
     
-    public String[] getServers(){
-        return (String[]) ServerList.toArray();
+    public Object[] getServers(){
+        return ServerList.toArray();
     }
     
     public RedisHandle RegisterChannel(String ch,ChannelMessage msg){
@@ -231,7 +231,8 @@ public class RedisPipeAPI {
         try {
             byte[] arrays=js.get(("PlayerData-"+p).getBytes());
             if(arrays!=null){
-                PlayerInfo.load(arrays, p);
+                //PlayerInfo.load(arrays, p);
+                PlayerInfo.saveData( p, arrays);
             }
             pool.release(js);
         } catch (Exception e) {

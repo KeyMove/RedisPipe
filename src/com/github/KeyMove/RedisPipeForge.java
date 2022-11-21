@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.script.ScriptEngine;
+import net.minecraft.block.material.Material;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
@@ -33,6 +34,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.WorldServer;
+import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.event.ServerChatEvent;
@@ -41,6 +43,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.ModContainer;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLServerStartedEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.eventhandler.EventBus;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -91,7 +94,10 @@ public class RedisPipeForge {
     }
     
     void setSpawn(String s){
-        
+        if(s==null)return;
+        String[] sp=s.split(",");
+        if(sp.length<4)return;
+        PlayerInfo.setSpawnPoint(Integer.parseInt(sp[0]), Integer.parseInt(sp[1]), Integer.parseInt(sp[2]), Integer.parseInt(sp[3]));   
     }
     
     
@@ -115,12 +121,13 @@ public class RedisPipeForge {
         数据库=pool.get();
         数据库.clientSetname(RedisPipeAPI.ServerName);
         if(localaddr==null)Updatelocaladdr();
-        数据库.lpush("server", RedisPipeAPI.ServerName);
-            if(!localaddr.contains("127.0.0.1"))
-            {
-                数据库.set("serverinfo-"+RedisPipeAPI.ServerName, localaddr+","+localport);
-                log("本机地址: ["+localaddr+"]");
-            }
+        if(!数据库.lrange("server", 0, -1).contains(RedisPipeAPI.ServerName))
+            数据库.lpush("server", RedisPipeAPI.ServerName);
+        if(!localaddr.contains("127.0.0.1"))
+        {
+            数据库.set("serverinfo-"+RedisPipeAPI.ServerName, localaddr+","+localport);
+            log("本机地址: ["+localaddr+"]");
+        }
         log("数据库初始化成功!");
         if(数据库API==null)
             数据库API=new RedisPipeAPI(pool,new ChannelMessage() {
@@ -430,6 +437,21 @@ public class RedisPipeForge {
                         UpdateServerInfo(args[1]);
                     }
                     break;
+                case "setspawn":
+                    if(args.length>1)
+                    {
+                        EntityPlayerMP mp=ms.func_184103_al().func_152612_a(args[1]);
+                        if(mp==null){
+                            sender.func_145747_a(ITextComponent.Serializer.func_150699_a("{\"text\":\"[RedisPipe] 未找到该玩家\"}"));
+                            return;
+                        }
+                        setnewspawn(mp);
+                    }
+                    else if(sender instanceof EntityPlayerMP){
+                        EntityPlayerMP mp=(EntityPlayerMP)sender;
+                        setnewspawn(mp);
+                    }
+                    break;
                 case "reloadjs":
                     handle.restart();
                     LoadJSFile();
@@ -437,9 +459,38 @@ public class RedisPipeForge {
             }
             //throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
         }
+
+        
+        
         
     }
+    
+    private void setnewspawn(EntityPlayerMP mp) {
+            int dim=mp.field_71093_bK;
+            int x=(int)mp.field_70165_t;
+            int y=(int)mp.field_70163_u;
+            int z=(int)mp.field_70161_v;
+            config.get("data", "SpwanPoint", "","自定义玩家出生点位置").set(String.format("%d,%d,%d,%d", dim,x,y,z));
+            config.save();
+    }
+    private void setnewspawn(int dim,BlockPos pos) {
+            int x=pos.func_177958_n();
+            int y=pos.func_177956_o();
+            int z=pos.func_177952_p();
+            config.get("data", "SpwanPoint", "","自定义玩家出生点位置").set(String.format("%d,%d,%d,%d", dim,x,y,z));
+            config.save();
+    }
     JSForge handle;
+    
+    @EventHandler
+    public void started(FMLServerStartedEvent e){
+        if(EnableJS){
+            out.print("Load JS");
+            handle=new JSForge(Container);
+            LoadJSFile();
+        }
+    }
+    
     @EventHandler
     public void start(FMLServerStartingEvent e){
         e.registerServerCommand(new CMD());
@@ -447,15 +498,32 @@ public class RedisPipeForge {
         ms=e.getServer();
         pl=ms.func_184103_al();
         
+        if(!PlayerInfo.SpawnSet()){
         WorldServer w=ms.field_71305_c[0];
-        BlockPos pos=w.func_175694_M();
+        BlockPos pos=w.func_175672_r(w.func_175694_M());
+        log("spawn x:"+pos.func_177958_n()+" y:"+pos.func_177956_o()+" z:"+pos.func_177952_p());
+        setnewspawn(0,pos);
         PlayerInfo.setSpawnPoint(0  , pos.func_177958_n(), pos.func_177956_o(), pos.func_177952_p()); 
-        
-        if(EnableJS){
-            out.print("Load JS");
-            handle=new JSForge(Container);
-            LoadJSFile();
+        /*
+        Chunk chunk = w.func_175726_f(w.func_175694_M());
+        int ct=0;
+        for(int i=0;i<192;i++){
+            pos=pos.func_177984_a();
+            //log("x:"+pos.func_177958_n()+" y:"+pos.func_177956_o()+" z:"+pos.func_177952_p());
+            if(Material.field_151579_a==chunk.func_177435_g(pos).func_185904_a()){
+                if(++ct==2){
+                    log("spawn x:"+pos.func_177958_n()+" y:"+pos.func_177956_o()+" z:"+pos.func_177952_p());
+                    PlayerInfo.setSpawnPoint(0  , pos.func_177958_n(), pos.func_177956_o(), pos.func_177952_p()); 
+                    break;
+                }
+            }
+            else
+                ct=0;
         }
+*/
+        }
+            
+        
     }
     
     @SubscribeEvent

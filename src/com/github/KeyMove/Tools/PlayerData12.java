@@ -14,6 +14,8 @@ import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagDouble;
 import net.minecraft.nbt.NBTTagList;
+import net.minecraft.util.math.BlockPos;
+import net.minecraftforge.fml.common.FMLCommonHandler;
 
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
@@ -29,7 +31,10 @@ public class PlayerData12 extends PlayerData{
         @Override
         public void setSpawn(int dim,int x,int y,int z){
             this.dim=dim;
-            
+            this.x=x;
+            this.y=y;
+            this.z=z;
+            setspawn=true;
         }
         public PlayerData12(){
             
@@ -101,7 +106,7 @@ public class PlayerData12 extends PlayerData{
     @Override
     public void saveUUID(UUID uuid,byte[] data){
         try{
-            RedisPipeForge.log.log(Level.INFO,"[RedisPipe] save UUID: "+uuid);
+            //RedisPipeForge.log.log(Level.INFO,"[RedisPipe] save UUID: "+uuid);
             ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(data);
             NBTTagCompound nbt=CompressedStreamTools.func_74796_a(byteArrayInputStream);
             NBTTagCompound oldnbt=null;
@@ -143,6 +148,11 @@ public class PlayerData12 extends PlayerData{
                 //    safeLocation.setY(w0.getHighestBlockYAt(w0.getSpawnLocation()));
                 //}
                 //UUIDWorld=safeLocation.getWorld().getUID();
+                nbt.func_74757_a("Invulnerable", false);
+                if(!setspawn){
+                    BlockPos pos=FMLCommonHandler.instance().getMinecraftServerInstance().field_71305_c[0].func_175694_M();
+                    setSpawn(0  , pos.func_177958_n(), pos.func_177956_o(), pos.func_177952_p()); 
+                }
                 nbt.func_74782_a("Pos",(NBTBase)func_70087_a(new double[] { x, y, z }));
                 nbt.func_74768_a("Dimension", dim);
                 //nbt.func_74772_a("WorldUUIDLeast",UUIDWorld.getLeastSignificantBits());
@@ -163,7 +173,7 @@ public class PlayerData12 extends PlayerData{
             //EntityPlayer player=(cp).getHandle();
             //NBTTagCompound oldnbt=((SaveHandler)(((CraftServer)cp.getServer()).getHandle()).field_72412_k).getPlayerData(uuid);
             if(saveFile){
-            out.print("[RedisPipe] save : "+uuid + ".dat");
+            //out.print("[RedisPipe] save : "+uuid + ".dat");
             File file1 = new File(PlayerData, uuid + ".dat.tmp");
             File file2 = new File(PlayerData, uuid + ".dat");
             FileOutputStream fs=new FileOutputStream(file1);

@@ -45,6 +45,7 @@ public class PlayerDataVanilla extends PlayerData {
     @Override
     public void setSpawn(UUID uuid,int x,int y,int z){
         safeLocation=new Location(getServer().getWorld(uuid),x,y,z);
+        setspawn=true;
     }
     
      @Override

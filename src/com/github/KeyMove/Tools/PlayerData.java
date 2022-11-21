@@ -18,7 +18,7 @@ public class PlayerData{
     int dim=0;
     UUID UUIDWorld;
     boolean saveFile=true;
-    
+    public boolean setspawn=false;
     public void setSpawn(UUID uuid,int x,int y,int z){
         
     }

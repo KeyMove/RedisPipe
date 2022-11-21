@@ -37,9 +37,12 @@ import net.minecraft.command.CommandException;
 import net.minecraft.command.CommandHandler;
 import net.minecraft.command.ICommand;
 import net.minecraft.command.ICommandSender;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentString;
+import net.minecraft.world.storage.IPlayerFileData;
 import net.minecraftforge.event.ServerChatEvent;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Loader;
@@ -336,6 +339,58 @@ public class JSForge {
             HandlerList.remove(ch);
         }
         
+    }
+    
+    class PF implements IPlayerFileData{
+        JSRunner save;
+        JSRunner load;
+        IPlayerFileData old;
+        public PF(IPlayerFileData old,JSRunner load,JSRunner save){
+            this.old=old;
+            this.load=load;
+            this.save=save;
+        }
+        @Override
+        public void func_75753_a(EntityPlayer e) {
+            save.run(e);//throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
+
+        @Override
+        public NBTTagCompound func_75752_b(EntityPlayer p_75752_1_) {
+            NBTTagCompound nbt=new NBTTagCompound();
+            load.run(new Object[]{p_75752_1_,nbt});
+            return nbt;
+            //throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
+
+        @Override
+        public String[] func_75754_f() {
+            return old.func_75754_f();//throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+        }
+        
+    }
+    
+    public IPlayerFileData PlayerFileProxy(IPlayerFileData old,JSRunner read,JSRunner save){
+        return new IPlayerFileData() {
+            @Override
+            public void func_75753_a(EntityPlayer e) {
+                save.run(e);//throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+            }
+
+            @Override
+            public NBTTagCompound func_75752_b(EntityPlayer e) {
+                List<Object> array=new ArrayList<>();
+                array.add(e);
+                read.run(array);
+                return (NBTTagCompound)array.get(0);
+                //throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+            }
+
+            @Override
+            public String[] func_75754_f() {
+                return old.func_75754_f();//throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+            }
+        };
     }
     
     public void restart(){

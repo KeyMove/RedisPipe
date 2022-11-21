@@ -31,6 +31,10 @@ public class PlayerInfo{
         dt.setSpawn(world, x, y, z);
     }
     
+    public static boolean SpawnSet(){
+        return dt.setspawn;
+    }
+    
     public static byte[] save(UUID p){
         return dt.save(p);
     }
