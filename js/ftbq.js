@@ -1,9 +1,52 @@
-Tools.Event("com.feed_the_beast.ftbquests.events.ObjectCompletedEvent",function(e){
-    if(init!=null){
-        init();
-        init=null;
-        print("init ftbq sync")
+universe=Packages.com.feed_the_beast.ftblib.lib.data.Universe.get();
+TEAMPLAYER=Packages.com.feed_the_beast.ftblib.lib.data.TeamType.PLAYER;
+universeplayers=Packages.com.feed_the_beast.ftblib.lib.data.Universe.class.getDeclaredFields()[4];
+universeplayers.setAccessible(true);
+blocksync=false;
+teamlogin=new Packages.java.util.ArrayList();
+pullquest=function(team){
+    init();
+    var db=Packages.com.github.KeyMove.RedisPipeAPI.database;
+    if(db==null)return;
+    var qs=db.lrange("ftbquest."+team, 0, -1);
+    var d=handle.getData(team.getId());
+    blocksync=true;
+    for(var i=0;i<qs.size();i++){
+        var v=qs.get(i).split(",");
+        var q=handle.chapters.get(Number(v[0])).quests.get(Number(v[1]));
+        if(!q.isComplete(d))
+        {
+            q.changeProgress(d,comp);
+            for(var k=0;k<q.rewards.size();k++){
+                var rw=q.rewards.get(k);
+                var ps=team.getMembers();
+                for(var j=0;j<ps.size();j++)
+                    d.setRewardClaimed(ps.get(j).getId(),rw);
+            }
+        }
     }
+    blocksync=false;
+}
+Tools.Event("com.feed_the_beast.ftblib.events.player.ForgePlayerLoggedInEvent",function(e){
+    var fp=e.getPlayer();
+    if(!fp.hasTeam())return;
+    if(teamlogin.contains(fp.team)){
+        teamlogin.add(fp.team);
+        pullquest(fp.team);
+        print(team+" 队伍同步完成!");
+    }
+});
+Tools.Event("com.feed_the_beast.ftblib.events.team.ForgeTeamCreatedEvent",function(e){
+    var team=e.getTeam();
+    var fp=team.getOwner();
+    print(fp.getName()+" 创建队伍!");
+    pullquest(team);
+    print(team+" 队伍同步完成!");
+    Tools.PublishMessage("ftbquest",Packages.com.github.KeyMove.RedisPipeAPI.ServerName+","+fp.getName()+","+fp.getId());
+});
+Tools.Event("com.feed_the_beast.ftbquests.events.ObjectCompletedEvent",function(e){
+    if(blocksync)return;
+    init();
     lastquest=e.getObject();
     //print("tq:"+lastquest.id);
     if(task.class.isInstance(lastquest)){
@@ -25,16 +68,14 @@ Tools.Event("com.feed_the_beast.ftbquests.events.ObjectCompletedEvent",function(
         var data=n+","+c+","+q;
         if(data==lastdata||data==predata)return;
         Tools.PublishMessage("ftbquest",sername+","+data);
+        var db=Packages.com.github.KeyMove.RedisPipeAPI.database;
+        if(db!=null)db.lpush("ftbquest."+n, c+","+q);
         print("quest: "+data);
     }
 });
 Tools.OnMessage("ftbquest",function(e){
     var v=e.split(',');
-    if(init!=null){
-        init();
-        init=null;
-        print("init ftbq sync")
-    }
+    init();
     if(v[0]==sername)return;
     var t;
     switch(v.length){
@@ -69,6 +110,26 @@ Tools.OnMessage("ftbquest",function(e){
         case 4:
             t=handle.chapters.get(Number(v[2])).quests.get(Number(v[3]));
             break;
+        case 3:
+            var uuid=Packages.java.util.UUID.fromString(v[2]);
+            var fp=universe.getPlayer(uuid);
+            if(fp==null)
+            {
+                fp = new Packages.com.feed_the_beast.ftblib.lib.data.ForgePlayer(universe, uuid, v[1]);
+                universeplayers.get(universe).put(uuid, fp);
+            }
+            if(fp.team.getUID()==0){
+                var team=new Packages.com.feed_the_beast.ftblib.lib.data.ForgeTeam(universe, universe.generateTeamUID(0), fp.getName(), TEAMPLAYER);
+                fp.team=team;
+                team.owner = fp;
+                team.universe.addTeam(team);
+                team.markDirty();
+                fp.markDirty();
+                print(fp.getName()+" 创建队伍! ["+team+"]");
+                new Packages.com.feed_the_beast.ftblib.events.team.ForgeTeamCreatedEvent(team).post();
+            }
+            return;
+            break;
         default:
             return;
     }
@@ -76,8 +137,11 @@ Tools.OnMessage("ftbquest",function(e){
     predata=lastdata;
     lastdata=e.substring(v[0].length+1);
     var d=handle.getData(v[1]);
-    if(!t.isComplete(d))
+    if(!t.isComplete(d)){
+        blocksync=true;
         t.changeProgress(d,comp);
+        blocksync=false;
+    }
     print(e);
 });
 init=function(){
@@ -92,6 +156,8 @@ init=function(){
     predata="";
     nextquest=-1;
     recvquest=-1;
+    print("init ftbq sync");
+    init=function(){};
 }
 // Tools.Event("ServerChatEvent",function(e){
 //     lastplayer=e.getPlayer();
@@ -153,3 +219,40 @@ Tools.ChannelBefor(pipe.pipeline(),type,"qb",function(e){
         Tools.PublishMessage("ftbquest",sername+","+data);
     }
 });
+Tools.Command("ftbqreset","ftbqreset <team>",function(e){
+    if(e.args.length==0){
+        e.send("ftbqreset <team>重置团队任务数据库");
+        return;
+    }
+    else{
+        init();
+        var team=universe.getTeam(e.args[0]);
+        if(team==null){
+            e.send("未找到队伍"+e.args[0]);
+            return;
+        }
+        var db=Packages.com.github.KeyMove.RedisPipeAPI.database;
+        if(db==null)return;
+        db.del("ftbquest."+team);
+        e.send("已重置["+team+"]任务数据库");
+    }
+})
+
+Tools.Command("ftbqsync","ftbqsync <team>",function(e){
+    if(e.args.length==0){
+        e.send("ftbqsync <team>同步团队任务数据库");
+        return;
+    }
+    else{
+        init();
+        var team=universe.getTeam(e.args[0]);
+        if(team==null){
+            e.send("未找到队伍"+e.args[0]);
+            return;
+        }
+        var db=Packages.com.github.KeyMove.RedisPipeAPI.database;
+        if(db==null)return;
+        pullquest(team);
+        e.send(team+"任务数据库同步完成");
+    }
+})

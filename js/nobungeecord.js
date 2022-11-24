@@ -12,6 +12,8 @@ Tools.Event("net.minecraftforge.fml.common.gameevent.PlayerEvent$PlayerLoggedOut
         if(!target.contains(v)&&Packages.com.github.KeyMove.RedisPipeAPI.ServerName!=v)
             target.add(v);
     }
+    var uuid=e.player.func_110124_au();
+    RedisApi.SavePlayer(uuid);
     for(var i=0;i<target.size();i++)
-        RedisApi.sendPlayer(e.player.func_110124_au(),target.get(i));
+        RedisApi.sendPlayer(uuid,target.get(i));
 });
