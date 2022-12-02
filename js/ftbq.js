@@ -26,7 +26,6 @@ blocksync=false;
 blockteamsync=false;
 
 loadteam=function(){
-    init();
     var db = Packages.com.github.KeyMove.RedisPipeAPI.database;
     if (db == null) return;
     var qs = db.lrange("ftbteam", 0, -1);
